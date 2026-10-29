@@ -15,7 +15,9 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -26,7 +28,7 @@ public class AiProviderClient {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final HttpClient httpClient;
 
-    @Value("${sentineldesk.ai.enabled:false}")
+    @Value("${sentineldesk.ai.enabled:true}")
     private boolean enabled;
 
     @Value("${sentineldesk.ai.provider:openai}")
@@ -51,45 +53,44 @@ public class AiProviderClient {
     }
 
     public boolean isEnabled() {
-        return enabled && apiKey != null && !apiKey.trim().isEmpty();
+        return enabled && apiKey != null && !apiKey.trim().isEmpty() && !apiKey.trim().equals("demo-key");
+    }
+
+    public String getProvider() {
+        return provider;
+    }
+
+    public String getModel() {
+        return model;
     }
 
     public AiTriageResult classifyTicket(String title, String description) {
         if (!isEnabled()) {
-            log.info("AI Provider is not configured or disabled. Using deterministic rule-based triage fallback.");
+            log.info("AI Provider key is empty or set to demo-key. Executing deterministic heuristic triage engine.");
             return generateDeterministicFallback(title, description);
         }
 
         try {
-            return callExternalLlmApi(title, description);
+            if ("gemini".equalsIgnoreCase(provider)) {
+                return callGoogleGeminiApi(title, description);
+            } else {
+                return callOpenAiApi(title, description);
+            }
         } catch (Exception ex) {
-            log.error("AI Provider call failed: {}. Gracefully falling back to rule-based triage.", ex.getMessage());
+            log.error("AI Provider call failed ({}: {}). Falling back safely to deterministic triage.", provider, ex.getMessage());
             return generateDeterministicFallback(title, description);
         }
     }
 
-    private AiTriageResult callExternalLlmApi(String title, String description) throws Exception {
-        // Untrusted input sanitization: strip prompt manipulation attempts
+    private AiTriageResult callOpenAiApi(String title, String description) throws Exception {
         String sanitizedTitle = sanitizePromptInput(title);
         String sanitizedDesc = sanitizePromptInput(description);
 
-        String systemPrompt = "You are SentinelDesk AI, an automated IT service management triage system. " +
-                "Classify the ticket into JSON format with the following keys strictly: " +
-                "\"category\" (one of SOFTWARE, HARDWARE, NETWORK, ACCESS, SECURITY, OUTAGE, OTHER), " +
-                "\"suggestedPriority\" (one of P1, P2, P3, P4), " +
-                "\"summary\" (concise 1-sentence issue summary), " +
-                "\"suggestedDomain\" (technical domain), " +
-                "\"suggestedTeam\" (e.g. Tier 1 Service Desk, Network Operations (NOC), Cloud & Infrastructure, Security Operations (SOC)), " +
-                "\"diagnosticQuestions\" (array of 2 diagnostic questions), " +
-                "\"suggestedActions\" (array of 2 troubleshooting steps), " +
-                "\"priorityExplanation\" (why this priority was assigned), " +
-                "\"confidenceEstimate\" (number between 0 and 100). " +
-                "Return ONLY a valid JSON object without markdown fences.";
-
+        String systemPrompt = buildSystemPrompt();
         String userPrompt = "TICKET TITLE: " + sanitizedTitle + "\n\nTICKET DESCRIPTION: " + sanitizedDesc;
 
         Map<String, Object> requestBody = Map.of(
-                "model", model,
+                "model", model.startsWith("gemini") ? "gpt-4o-mini" : model,
                 "messages", List.of(
                         Map.of("role", "system", "content", systemPrompt),
                         Map.of("role", "user", "content", userPrompt)
@@ -114,18 +115,117 @@ public class AiProviderClient {
             JsonNode root = objectMapper.readTree(response.body());
             String content = root.path("choices").path(0).path("message").path("content").asText();
             AiTriageResult result = parseAndValidateJson(content);
-            result.setModelProvider(provider);
-            result.setModelName(model);
-            return result;
+            if (result != null) {
+                result.setModelProvider("openai");
+                result.setModelName(model);
+                return result;
+            }
         } else {
-            log.warn("AI Provider returned non-200 code: {} - {}", response.statusCode(), response.body());
-            return generateDeterministicFallback(title, description);
+            log.warn("OpenAI API returned code: {} - {}", response.statusCode(), response.body());
         }
+
+        return generateDeterministicFallback(title, description);
+    }
+
+    private AiTriageResult callGoogleGeminiApi(String title, String description) throws Exception {
+        String sanitizedTitle = sanitizePromptInput(title);
+        String sanitizedDesc = sanitizePromptInput(description);
+
+        String systemPrompt = buildSystemPrompt();
+        String userPrompt = "TICKET TITLE: " + sanitizedTitle + "\n\nTICKET DESCRIPTION: " + sanitizedDesc;
+
+        String geminiModel = model.startsWith("gpt") ? "gemini-1.5-flash" : model;
+        String geminiUrl = "https://generativelanguage.googleapis.com/v1beta/models/" + geminiModel + ":generateContent?key=" + apiKey.trim();
+
+        Map<String, Object> requestBody = Map.of(
+                "contents", List.of(
+                        Map.of("parts", List.of(
+                                Map.of("text", systemPrompt + "\n\n" + userPrompt)
+                        ))
+                ),
+                "generationConfig", Map.of(
+                        "responseMimeType", "application/json",
+                        "temperature", 0.1
+                )
+        );
+
+        String jsonPayload = objectMapper.writeValueAsString(requestBody);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(geminiUrl))
+                .header("Content-Type", "application/json")
+                .timeout(Duration.ofMillis(timeoutMs))
+                .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
+                .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        if (response.statusCode() >= 200 && response.statusCode() < 300) {
+            JsonNode root = objectMapper.readTree(response.body());
+            String content = root.path("candidates").path(0).path("content").path("parts").path(0).path("text").asText();
+            AiTriageResult result = parseAndValidateJson(content);
+            if (result != null) {
+                result.setModelProvider("google-gemini");
+                result.setModelName(geminiModel);
+                return result;
+            }
+        } else {
+            log.warn("Gemini API returned code: {} - {}", response.statusCode(), response.body());
+        }
+
+        return generateDeterministicFallback(title, description);
+    }
+
+    public Map<String, Object> testConnection() {
+        Map<String, Object> testResult = new HashMap<>();
+        testResult.put("provider", provider);
+        testResult.put("model", model);
+        testResult.put("configured", isEnabled());
+
+        if (!isEnabled()) {
+            testResult.put("status", "FALLBACK_MODE");
+            testResult.put("message", "No API key configured (or demo-key placeholder in use). Running high-accuracy deterministic rule classifier.");
+            testResult.put("sampleTriage", generateDeterministicFallback("VPN tunnel disconnected", "Cannot reach corporate intranet"));
+            return testResult;
+        }
+
+        long start = System.currentTimeMillis();
+        try {
+            AiTriageResult result = ("gemini".equalsIgnoreCase(provider))
+                    ? callGoogleGeminiApi("Database connection timeout", "Production API reports Hikari pool exhausted")
+                    : callOpenAiApi("Database connection timeout", "Production API reports Hikari pool exhausted");
+
+            long latency = System.currentTimeMillis() - start;
+            testResult.put("status", "SUCCESS");
+            testResult.put("latencyMs", latency);
+            testResult.put("message", "Successfully communicated with " + provider + " (" + model + ") in " + latency + "ms.");
+            testResult.put("sampleTriage", result);
+        } catch (Exception ex) {
+            testResult.put("status", "FAILED");
+            testResult.put("error", ex.getMessage());
+            testResult.put("fallbackActive", true);
+        }
+
+        return testResult;
+    }
+
+    private String buildSystemPrompt() {
+        return "You are SentinelDesk AI, an automated IT service management triage system. " +
+                "Classify the ticket into JSON format with the following keys strictly: " +
+                "\"category\" (one of SOFTWARE, HARDWARE, NETWORK, ACCESS, SECURITY, OUTAGE, OTHER), " +
+                "\"suggestedPriority\" (one of P1, P2, P3, P4), " +
+                "\"summary\" (concise 1-sentence issue summary), " +
+                "\"suggestedDomain\" (technical domain), " +
+                "\"suggestedTeam\" (e.g. Tier 1 Service Desk, Network Operations (NOC), Cloud & Infrastructure, Security Operations (SOC)), " +
+                "\"diagnosticQuestions\" (array of 2 diagnostic questions), " +
+                "\"suggestedActions\" (array of 2 troubleshooting steps), " +
+                "\"priorityExplanation\" (why this priority was assigned), " +
+                "\"confidenceEstimate\" (number between 0 and 100). " +
+                "Return ONLY a valid JSON object without markdown fences.";
     }
 
     public AiTriageResult parseAndValidateJson(String jsonContent) {
         try {
-            // Strip any accidental markdown formatting
             String clean = jsonContent.trim();
             if (clean.startsWith("```json")) {
                 clean = clean.substring(7);
@@ -251,7 +351,6 @@ public class AiProviderClient {
 
     private String sanitizePromptInput(String input) {
         if (input == null) return "";
-        // Mitigate prompt injection by stripping explicit instructions attempting to jailbreak system prompt
         return input.replace("```", "")
                 .replace("system:", "")
                 .replace("IGNORE ALL PREVIOUS INSTRUCTIONS", "[REDACTED_PROMPT_ATTEMPT]")

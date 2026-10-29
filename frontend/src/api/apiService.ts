@@ -1,15 +1,21 @@
 import { api } from './client';
 import {
+  AiStatusResponse,
   AiTriageSuggestion,
   AuditLog,
+  CreateArticleRequest,
   DashboardCharts,
   DashboardSummary,
   EscalationEvent,
+  InboundEmailRequest,
+  InboundEmailResponse,
   Incident,
+  KnowledgeArticle,
   Notification,
   PagedResponse,
   Role,
   SlaPolicy,
+  SlaReportSummary,
   SlaTracker,
   Team,
   TeamMember,
@@ -116,6 +122,8 @@ export const aiApi = {
     data: { newCategory: TicketCategory; newPriority: TicketPriority; newTeamId?: number; reason: string }
   ) =>
     api.post<AiTriageSuggestion>(`/tickets/${ticketId}/ai-triage/${suggestionId}/override`, data),
+  getStatus: () => api.get<AiStatusResponse>('/ai/status'),
+  testConnection: () => api.post<Record<string, any>>('/ai/test-connection'),
 };
 
 // SLA
@@ -185,3 +193,51 @@ export const auditApi = {
   getLogs: (page = 0, size = 20) =>
     api.get<PagedResponse<AuditLog>>(`/audit-logs?page=${page}&size=${size}`),
 };
+
+// Knowledge Base & Runbooks
+export const knowledgeBaseApi = {
+  searchArticles: (query?: string, category?: string, page = 0, size = 10) => {
+    const params = new URLSearchParams({ page: page.toString(), size: size.toString() });
+    if (query) params.append('query', query);
+    if (category) params.append('category', category);
+    return api.get<PagedResponse<KnowledgeArticle>>(`/knowledge-base?${params.toString()}`);
+  },
+  getArticle: (id: number) => api.get<KnowledgeArticle>(`/knowledge-base/${id}`),
+  suggestArticles: (query?: string, category?: string) => {
+    const params = new URLSearchParams();
+    if (query) params.append('query', query);
+    if (category) params.append('category', category);
+    return api.get<KnowledgeArticle[]>(`/knowledge-base/suggest?${params.toString()}`);
+  },
+  createArticle: (data: CreateArticleRequest) => api.post<KnowledgeArticle>('/knowledge-base', data),
+  voteHelpful: (id: number) => api.post<KnowledgeArticle>(`/knowledge-base/${id}/vote`),
+};
+
+// Inbound Email Ingestion
+export const emailApi = {
+  simulateInboundEmail: (data: InboundEmailRequest) =>
+    api.post<InboundEmailResponse>('/email/inbound', data),
+};
+
+// Reports & SLA Compliance Export
+export const reportApi = {
+  getSlaSummary: () => api.get<SlaReportSummary>('/reports/sla/summary'),
+  exportSlaReportCsv: () => {
+    const token = localStorage.getItem('token');
+    const url = '/api/v1/reports/sla/export';
+    fetch(url, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((res) => res.blob())
+      .then((blob) => {
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = `sentineldesk_sla_compliance_${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      });
+  },
+};
+

@@ -13,16 +13,26 @@ import java.util.stream.Collectors;
 public class NotificationService {
 
     private final NotificationRepository notificationRepository;
+    private final SseNotificationService sseNotificationService;
 
-    public NotificationService(NotificationRepository notificationRepository) {
+    public NotificationService(NotificationRepository notificationRepository,
+                               SseNotificationService sseNotificationService) {
         this.notificationRepository = notificationRepository;
+        this.sseNotificationService = sseNotificationService;
     }
 
     @Transactional
     public Notification createNotification(User recipient, String title, String message, String link) {
         if (recipient == null) return null;
         Notification notification = new Notification(recipient, title, message, link);
-        return notificationRepository.save(notification);
+        Notification saved = notificationRepository.save(notification);
+
+        // Push real-time event to connected SSE clients
+        try {
+            sseNotificationService.sendToUser(recipient.getId(), "NOTIFICATION", new NotificationDTO(saved));
+        } catch (Exception ignored) {}
+
+        return saved;
     }
 
     @Transactional(readOnly = true)

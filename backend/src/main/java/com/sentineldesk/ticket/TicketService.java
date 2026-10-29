@@ -11,6 +11,7 @@ import com.sentineldesk.history.TicketAssignmentHistoryRepository;
 import com.sentineldesk.history.TicketStatusHistory;
 import com.sentineldesk.history.TicketStatusHistoryRepository;
 import com.sentineldesk.notification.NotificationService;
+import com.sentineldesk.notification.SseNotificationService;
 import com.sentineldesk.security.SecurityUtils;
 import com.sentineldesk.sla.SlaService;
 import com.sentineldesk.team.Team;
@@ -49,6 +50,7 @@ public class TicketService {
     private final TicketStatusHistoryRepository statusHistoryRepository;
     private final TicketAssignmentHistoryRepository assignmentHistoryRepository;
     private final NotificationService notificationService;
+    private final SseNotificationService sseNotificationService;
     private final AuditService auditService;
 
     public TicketService(TicketRepository ticketRepository,
@@ -60,6 +62,7 @@ public class TicketService {
                          TicketStatusHistoryRepository statusHistoryRepository,
                          TicketAssignmentHistoryRepository assignmentHistoryRepository,
                          NotificationService notificationService,
+                         SseNotificationService sseNotificationService,
                          AuditService auditService) {
         this.ticketRepository = ticketRepository;
         this.ticketNumberGenerator = ticketNumberGenerator;
@@ -70,6 +73,7 @@ public class TicketService {
         this.statusHistoryRepository = statusHistoryRepository;
         this.assignmentHistoryRepository = assignmentHistoryRepository;
         this.notificationService = notificationService;
+        this.sseNotificationService = sseNotificationService;
         this.auditService = auditService;
     }
 
@@ -104,6 +108,16 @@ public class TicketService {
         // 4. Audit
         auditService.logSync(currentUserId, "TICKET_CREATED", "TICKET", ticket.getId().toString(),
                 "Created ticket " + ticket.getTicketNumber() + " with priority " + ticket.getPriority(), null);
+
+        // 5. Broadcast real-time SSE event
+        try {
+            sseNotificationService.broadcast("TICKET_CREATED", java.util.Map.of(
+                    "ticketNumber", ticket.getTicketNumber(),
+                    "title", ticket.getTitle(),
+                    "priority", ticket.getPriority().name(),
+                    "category", ticket.getCategory().name()
+            ));
+        } catch (Exception ignored) {}
 
         return getTicketDetails(ticket.getId());
     }

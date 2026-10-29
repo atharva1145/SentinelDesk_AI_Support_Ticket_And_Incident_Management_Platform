@@ -242,3 +242,63 @@ export interface ApiResponse<T> {
   data: T;
   timestamp: string;
 }
+
+export interface KnowledgeArticle {
+  id: number;
+  articleCode: string;
+  title: string;
+  summary: string;
+  content: string;
+  category: TicketCategory;
+  tags?: string;
+  viewCount: number;
+  helpfulCount: number;
+  authorName?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateArticleRequest {
+  title: string;
+  summary: string;
+  content: string;
+  category: TicketCategory;
+  tags?: string;
+}
+
+export interface InboundEmailRequest {
+  from: string;
+  senderName?: string;
+  to?: string;
+  subject: string;
+  body: string;
+  htmlBody?: string;
+}
+
+export interface InboundEmailResponse {
+  action: 'TICKET_CREATED' | 'COMMENT_ADDED';
+  ticketNumber: string;
+  ticketId: number;
+  message: string;
+  senderEmail: string;
+}
+
+export interface SlaReportSummary {
+  totalTickets: number;
+  compliantTickets: number;
+  breachedTickets: number;
+  overallComplianceRate: number;
+  firstResponseComplianceRate: number;
+  resolutionComplianceRate: number;
+  meanTimeToAcknowledgeMinutes: number;
+  meanTimeToResolveMinutes: number;
+  priorityBreakdown: Record<string, { total: number; breached: number; compliant: number }>;
+}
+
+export interface AiStatusResponse {
+  provider: string;
+  model: string;
+  configured: boolean;
+  fallbackAvailable: boolean;
+}
+

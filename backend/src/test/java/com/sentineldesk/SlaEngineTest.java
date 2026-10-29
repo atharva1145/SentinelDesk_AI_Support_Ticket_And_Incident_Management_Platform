@@ -4,6 +4,7 @@ import com.sentineldesk.escalation.EscalationLevel;
 import com.sentineldesk.escalation.EscalationRepository;
 import com.sentineldesk.escalation.EscalationService;
 import com.sentineldesk.notification.NotificationService;
+import com.sentineldesk.notification.SseNotificationService;
 import com.sentineldesk.sla.*;
 import com.sentineldesk.ticket.Ticket;
 import com.sentineldesk.ticket.TicketCategory;
@@ -32,6 +33,7 @@ public class SlaEngineTest {
     private SlaTrackerRepository trackerRepository;
     private EscalationRepository escalationRepository;
     private NotificationService notificationService;
+    private SseNotificationService sseNotificationService;
     private UserRepository userRepository;
     private SlaService slaService;
     private EscalationService escalationService;
@@ -42,10 +44,11 @@ public class SlaEngineTest {
         trackerRepository = mock(SlaTrackerRepository.class);
         escalationRepository = mock(EscalationRepository.class);
         notificationService = mock(NotificationService.class);
+        sseNotificationService = mock(SseNotificationService.class);
         userRepository = mock(UserRepository.class);
 
         slaService = new SlaService(policyRepository, trackerRepository);
-        escalationService = new EscalationService(escalationRepository, trackerRepository, notificationService, userRepository);
+        escalationService = new EscalationService(escalationRepository, trackerRepository, notificationService, sseNotificationService, userRepository);
     }
 
     @Test

@@ -22,6 +22,7 @@ import { Notifications } from './pages/Notifications';
 import { AuditLogs } from './pages/AuditLogs';
 import { UserAdmin } from './pages/UserAdmin';
 import { ApplicationSettings } from './pages/ApplicationSettings';
+import { KnowledgeBase } from './pages/KnowledgeBase';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -89,6 +90,7 @@ export const App: React.FC = () => {
                 }
               />
               <Route path="tickets/new" element={<CreateTicket />} />
+              <Route path="knowledge-base" element={<KnowledgeBase />} />
               <Route path="tickets/:id" element={<TicketDetails />} />
               <Route
                 path="assignment-queue"

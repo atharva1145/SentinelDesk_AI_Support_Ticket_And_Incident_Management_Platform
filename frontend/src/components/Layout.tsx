@@ -2,6 +2,7 @@ import React from 'react';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Navbar } from './Navbar';
+import { LiveAlertToast } from './LiveAlertToast';
 
 export const Layout: React.FC = () => {
   return (
@@ -15,6 +16,7 @@ export const Layout: React.FC = () => {
           </div>
         </main>
       </div>
+      <LiveAlertToast />
     </div>
   );
 };

@@ -2,6 +2,7 @@ package com.sentineldesk.escalation;
 
 import com.sentineldesk.common.exception.ResourceNotFoundException;
 import com.sentineldesk.notification.NotificationService;
+import com.sentineldesk.notification.SseNotificationService;
 import com.sentineldesk.sla.SlaTracker;
 import com.sentineldesk.sla.SlaTrackerRepository;
 import com.sentineldesk.ticket.Ticket;
@@ -27,6 +28,7 @@ public class EscalationService {
     private final EscalationRepository escalationRepository;
     private final SlaTrackerRepository slaTrackerRepository;
     private final NotificationService notificationService;
+    private final SseNotificationService sseNotificationService;
     private final UserRepository userRepository;
 
     @Value("${sentineldesk.sla.warning-threshold-percent:80}")
@@ -35,10 +37,12 @@ public class EscalationService {
     public EscalationService(EscalationRepository escalationRepository,
                              SlaTrackerRepository slaTrackerRepository,
                              NotificationService notificationService,
+                             SseNotificationService sseNotificationService,
                              UserRepository userRepository) {
         this.escalationRepository = escalationRepository;
         this.slaTrackerRepository = slaTrackerRepository;
         this.notificationService = notificationService;
+        this.sseNotificationService = sseNotificationService;
         this.userRepository = userRepository;
     }
 
@@ -135,6 +139,15 @@ public class EscalationService {
                     "/tickets/" + ticket.getId()
             );
         }
+
+        try {
+            sseNotificationService.broadcast("SLA_ALERT", java.util.Map.of(
+                    "ticketNumber", ticket.getTicketNumber(),
+                    "priority", ticket.getPriority().name(),
+                    "escalationLevel", level.name(),
+                    "reason", reason
+            ));
+        } catch (Exception ignored) {}
     }
 
     private User findEscalationManager(Ticket ticket) {
