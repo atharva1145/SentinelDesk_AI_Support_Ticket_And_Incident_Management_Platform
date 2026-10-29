@@ -1,0 +1,33 @@
+package com.sentineldesk.comment;
+
+import jakarta.validation.constraints.NotBlank;
+
+public class CommentRequest {
+    @NotBlank(message = "Comment content cannot be blank")
+    private String content;
+
+    private boolean isInternal = false;
+
+    public CommentRequest() {}
+
+    public CommentRequest(String content, boolean isInternal) {
+        this.content = content;
+        this.isInternal = isInternal;
+    }
+
+    public String getContent() {
+        return content;
+    }
+
+    public void setContent(String content) {
+        this.content = content;
+    }
+
+    public boolean isInternal() {
+        return isInternal;
+    }
+
+    public void setInternal(boolean internal) {
+        isInternal = internal;
+    }
+}
