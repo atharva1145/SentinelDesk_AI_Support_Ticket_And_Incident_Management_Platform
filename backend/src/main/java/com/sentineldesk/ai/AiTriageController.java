@@ -1,6 +1,9 @@
 package com.sentineldesk.ai;
 
+import com.sentineldesk.common.exception.ResourceNotFoundException;
 import com.sentineldesk.common.response.ApiResponse;
+import com.sentineldesk.ticket.Ticket;
+import com.sentineldesk.ticket.TicketRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -12,13 +15,19 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/tickets/{ticketId}/ai-triage")
-@Tag(name = "AI Ticket Triage", description = "Review, accept, or override AI ticket classification and diagnostics")
+@Tag(name = "AI Ticket Triage & Copilot", description = "Review, accept, or override AI ticket classification and diagnostics")
 public class AiTriageController {
 
     private final AiTriageService aiTriageService;
+    private final AiProviderClient aiProviderClient;
+    private final TicketRepository ticketRepository;
 
-    public AiTriageController(AiTriageService aiTriageService) {
+    public AiTriageController(AiTriageService aiTriageService,
+                              AiProviderClient aiProviderClient,
+                              TicketRepository ticketRepository) {
         this.aiTriageService = aiTriageService;
+        this.aiProviderClient = aiProviderClient;
+        this.ticketRepository = ticketRepository;
     }
 
     @GetMapping
@@ -52,5 +61,28 @@ public class AiTriageController {
             @Valid @RequestBody OverrideAiSuggestionRequest request) {
         AiTriageResponseDTO result = aiTriageService.overrideSuggestion(ticketId, suggestionId, request);
         return ResponseEntity.ok(ApiResponse.success("AI suggestion overridden", result));
+    }
+
+    @PostMapping("/copilot")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPPORT_MANAGER', 'SUPPORT_AGENT')")
+    @Operation(summary = "Interact with AI Copilot (auto-draft replies, summarize, suggest troubleshooting)")
+    public ResponseEntity<ApiResponse<AiCopilotResponseDTO>> runCopilot(
+            @PathVariable Long ticketId,
+            @Valid @RequestBody AiCopilotRequest request) {
+        Ticket ticket = ticketRepository.findById(ticketId)
+                .orElseThrow(() -> new ResourceNotFoundException("Ticket not found: " + ticketId));
+
+        String requesterName = ticket.getRequester() != null ? ticket.getRequester().getFullName() : "Customer";
+        String response = aiProviderClient.runCopilotQuery(
+                request.getAction(),
+                request.getCustomPrompt(),
+                ticket.getTitle(),
+                ticket.getDescription(),
+                requesterName
+        );
+
+        String modelName = aiProviderClient.isEnabled() ? aiProviderClient.getModel() : "sentinel-copilot-engine";
+        AiCopilotResponseDTO dto = new AiCopilotResponseDTO(request.getAction(), response, modelName);
+        return ResponseEntity.ok(ApiResponse.success("Copilot generated output", dto));
     }
 }

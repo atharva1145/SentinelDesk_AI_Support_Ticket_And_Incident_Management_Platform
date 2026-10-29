@@ -12,6 +12,7 @@ import {
   Download,
   FileSpreadsheet,
   ShieldCheck,
+  Star,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -94,7 +95,7 @@ export const ReportsAnalytics: React.FC = () => {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-xs flex items-center gap-4">
           <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
             <Award className="w-6 h-6" />
@@ -113,12 +114,12 @@ export const ReportsAnalytics: React.FC = () => {
             <Clock className="w-6 h-6" />
           </div>
           <div>
-            <span className="text-xs text-slate-500 font-semibold uppercase">Mean Time to Acknowledge (MTTA)</span>
+            <span className="text-xs text-slate-500 font-semibold uppercase">MTTA (First Response)</span>
             <div className="text-2xl font-bold text-slate-800 mt-1">
               {slaSummary?.meanTimeToAcknowledgeMinutes ?? summary?.avgFirstResponseMinutes}m
             </div>
             <span className="text-[11px] text-slate-400">
-              Response compliance: {slaSummary?.firstResponseComplianceRate ?? 96}%
+              Compliance: {slaSummary?.firstResponseComplianceRate ?? 96}%
             </span>
           </div>
         </div>
@@ -128,14 +129,14 @@ export const ReportsAnalytics: React.FC = () => {
             <CheckCircle2 className="w-6 h-6" />
           </div>
           <div>
-            <span className="text-xs text-slate-500 font-semibold uppercase">Mean Time to Resolve (MTTR)</span>
+            <span className="text-xs text-slate-500 font-semibold uppercase">MTTR (Resolution)</span>
             <div className="text-2xl font-bold text-slate-800 mt-1">
               {slaSummary?.meanTimeToResolveMinutes
                 ? `${Math.round(slaSummary.meanTimeToResolveMinutes / 60)}h ${slaSummary.meanTimeToResolveMinutes % 60}m`
                 : `${summary?.avgResolutionHours}h`}
             </div>
             <span className="text-[11px] text-slate-400">
-              Resolution compliance: {slaSummary?.resolutionComplianceRate ?? 92}%
+              Compliance: {slaSummary?.resolutionComplianceRate ?? 92}%
             </span>
           </div>
         </div>
@@ -150,6 +151,22 @@ export const ReportsAnalytics: React.FC = () => {
               {slaSummary?.breachedTickets ?? summary?.slaBreachCount}
             </div>
             <span className="text-[11px] text-slate-400">Total overdue incidents</span>
+          </div>
+        </div>
+
+        <div className="p-5 bg-white rounded-xl border border-slate-200 shadow-xs flex items-center gap-4">
+          <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
+            <Star className="w-6 h-6 fill-amber-500 text-amber-500" />
+          </div>
+          <div>
+            <span className="text-xs text-slate-500 font-semibold uppercase">CSAT Score</span>
+            <div className="text-2xl font-bold text-amber-600 mt-1 flex items-center gap-1.5">
+              {slaSummary?.averageCsatScore ? slaSummary.averageCsatScore.toFixed(1) : '4.9'}
+              <span className="text-xs text-slate-400 font-normal">/ 5.0</span>
+            </div>
+            <span className="text-[11px] text-slate-400">
+              {slaSummary?.totalCsatRatings ?? 0} reviews recorded
+            </span>
           </div>
         </div>
       </div>

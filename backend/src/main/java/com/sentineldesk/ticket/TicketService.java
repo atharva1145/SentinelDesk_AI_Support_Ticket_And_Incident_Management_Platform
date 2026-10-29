@@ -260,6 +260,20 @@ public class TicketService {
 
         ticket.setStatus(newStatus);
 
+        // ITIL SLA Clock Pause / Resume handling
+        if (newStatus == TicketStatus.PENDING_REQUESTER) {
+            slaService.pauseSla(ticket);
+        } else if (oldStatus == TicketStatus.PENDING_REQUESTER) {
+            slaService.resumeSla(ticket);
+        }
+
+        // Handle ticket reopening
+        if (oldStatus == TicketStatus.RESOLVED && newStatus == TicketStatus.OPEN) {
+            ticket.setReopenedCount(ticket.getReopenedCount() + 1);
+            ticket.setResolvedAt(null);
+            ticket.setResolutionSummary(null);
+        }
+
         // Record first response timestamp if transitioning out of NEW / TRIAGED to OPEN / IN_PROGRESS
         if ((newStatus == TicketStatus.OPEN || newStatus == TicketStatus.IN_PROGRESS) && ticket.getFirstResponseAt() == null) {
             slaService.recordFirstResponse(ticket);
@@ -379,5 +393,30 @@ public class TicketService {
     @Transactional(readOnly = true)
     public List<TicketAssignmentHistory> getAssignmentHistory(Long ticketId) {
         return assignmentHistoryRepository.findByTicketIdOrderByCreatedAtAsc(ticketId);
+    }
+
+    @Transactional
+    public TicketResponseDTO submitCsat(Long ticketId, CsatRequest request) {
+        Ticket ticket = ticketRepository.findById(ticketId)
+                .orElseThrow(() -> new ResourceNotFoundException("Ticket not found: " + ticketId));
+
+        validateTicketAccess(ticket);
+
+        ticket.setCsatRating(request.getRating());
+        ticket.setCsatFeedback(request.getFeedback());
+
+        // Once rated by requester, automatically close resolved ticket
+        if (ticket.getStatus() == TicketStatus.RESOLVED) {
+            ticket.setStatus(TicketStatus.CLOSED);
+            ticket.setClosedAt(LocalDateTime.now());
+
+            Long currentUserId = SecurityUtils.getCurrentUserId();
+            User currentUser = currentUserId != null ? userRepository.findById(currentUserId).orElse(null) : null;
+            TicketStatusHistory history = new TicketStatusHistory(ticket, currentUser, TicketStatus.RESOLVED, TicketStatus.CLOSED, "Closed automatically via Customer Satisfaction Rating");
+            statusHistoryRepository.save(history);
+        }
+
+        ticket = ticketRepository.save(ticket);
+        return getTicketDetails(ticket.getId());
     }
 }

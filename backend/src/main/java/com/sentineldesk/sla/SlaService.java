@@ -75,6 +75,24 @@ public class SlaService {
     }
 
     @Transactional
+    public void pauseSla(Ticket ticket) {
+        trackerRepository.findByTicketId(ticket.getId()).ifPresent(tracker -> {
+            tracker.pause(LocalDateTime.now());
+            trackerRepository.save(tracker);
+            log.info("SLA clock PAUSED for ticket {} (waiting for requester)", ticket.getTicketNumber());
+        });
+    }
+
+    @Transactional
+    public void resumeSla(Ticket ticket) {
+        trackerRepository.findByTicketId(ticket.getId()).ifPresent(tracker -> {
+            tracker.resume(LocalDateTime.now());
+            trackerRepository.save(tracker);
+            log.info("SLA clock RESUMED for ticket {}. New deadline: {}", ticket.getTicketNumber(), tracker.getResolutionDeadline());
+        });
+    }
+
+    @Transactional
     public void updateTicketPrioritySla(Ticket ticket, TicketPriority newPriority) {
         trackerRepository.findByTicketId(ticket.getId()).ifPresent(tracker -> {
             SlaPolicy newPolicy = policyRepository.findByPriority(newPriority)

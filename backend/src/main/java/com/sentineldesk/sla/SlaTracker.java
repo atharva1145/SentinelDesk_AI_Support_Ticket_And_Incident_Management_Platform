@@ -44,6 +44,15 @@ public class SlaTracker {
     @Column(name = "warning_issued")
     private Boolean warningIssued = false;
 
+    @Column(name = "is_paused")
+    private Boolean isPaused = false;
+
+    @Column(name = "paused_at")
+    private LocalDateTime pausedAt;
+
+    @Column(name = "total_paused_minutes")
+    private Integer totalPausedMinutes = 0;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
@@ -174,5 +183,55 @@ public class SlaTracker {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public Boolean getIsPaused() {
+        return isPaused != null && isPaused;
+    }
+
+    public void setIsPaused(Boolean paused) {
+        this.isPaused = paused;
+    }
+
+    public LocalDateTime getPausedAt() {
+        return pausedAt;
+    }
+
+    public void setPausedAt(LocalDateTime pausedAt) {
+        this.pausedAt = pausedAt;
+    }
+
+    public Integer getTotalPausedMinutes() {
+        return totalPausedMinutes != null ? totalPausedMinutes : 0;
+    }
+
+    public void setTotalPausedMinutes(Integer totalPausedMinutes) {
+        this.totalPausedMinutes = totalPausedMinutes;
+    }
+
+    public void pause(LocalDateTime now) {
+        if (!Boolean.TRUE.equals(this.isPaused)) {
+            this.isPaused = true;
+            this.pausedAt = now != null ? now : LocalDateTime.now();
+        }
+    }
+
+    public void resume(LocalDateTime now) {
+        if (Boolean.TRUE.equals(this.isPaused) && this.pausedAt != null) {
+            LocalDateTime effectiveNow = now != null ? now : LocalDateTime.now();
+            long pausedMins = java.time.Duration.between(this.pausedAt, effectiveNow).toMinutes();
+            if (pausedMins > 0) {
+                this.totalPausedMinutes = (this.totalPausedMinutes != null ? this.totalPausedMinutes : 0) + (int) pausedMins;
+                // Extend resolution deadline by the paused duration
+                if (this.resolutionDeadline != null) {
+                    this.resolutionDeadline = this.resolutionDeadline.plusMinutes(pausedMins);
+                    if (this.ticket != null) {
+                        this.ticket.setSlaDeadline(this.resolutionDeadline);
+                    }
+                }
+            }
+            this.isPaused = false;
+            this.pausedAt = null;
+        }
     }
 }

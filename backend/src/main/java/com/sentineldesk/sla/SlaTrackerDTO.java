@@ -15,6 +15,9 @@ public class SlaTrackerDTO {
     private Boolean resolutionBreached;
     private Boolean isEscalated;
     private Boolean warningIssued;
+    private Boolean isPaused;
+    private LocalDateTime pausedAt;
+    private Integer totalPausedMinutes;
     private Long remainingMinutes;
     private boolean isOverdue;
 
@@ -32,6 +35,9 @@ public class SlaTrackerDTO {
         this.resolutionBreached = tracker.getResolutionBreached();
         this.isEscalated = tracker.getIsEscalated();
         this.warningIssued = tracker.getWarningIssued();
+        this.isPaused = tracker.getIsPaused();
+        this.pausedAt = tracker.getPausedAt();
+        this.totalPausedMinutes = tracker.getTotalPausedMinutes();
 
         LocalDateTime now = LocalDateTime.now();
         if (Boolean.TRUE.equals(tracker.getResolutionMet())) {
@@ -146,5 +152,29 @@ public class SlaTrackerDTO {
 
     public void setOverdue(boolean overdue) {
         isOverdue = overdue;
+    }
+
+    public Boolean getIsPaused() {
+        return isPaused;
+    }
+
+    public void setIsPaused(Boolean isPaused) {
+        this.isPaused = isPaused;
+    }
+
+    public LocalDateTime getPausedAt() {
+        return pausedAt;
+    }
+
+    public void setPausedAt(LocalDateTime pausedAt) {
+        this.pausedAt = pausedAt;
+    }
+
+    public Integer getTotalPausedMinutes() {
+        return totalPausedMinutes;
+    }
+
+    public void setTotalPausedMinutes(Integer totalPausedMinutes) {
+        this.totalPausedMinutes = totalPausedMinutes;
     }
 }

@@ -105,4 +105,43 @@ public class SlaEngineTest {
         assertEquals(0, secondRun, "Repeated execution must not create duplicate escalations");
         verify(escalationRepository, times(1)).save(any()); // Still only 1 total save
     }
+
+    @Test
+    @DisplayName("ITIL SLA pause pauses clock and pushes deadline forward upon resume while suppressing escalations")
+    void testSlaPauseResumeEngine() {
+        User user = new User("test@corp.com", "hash", "Tester", Role.REQUESTER, "IT");
+        Ticket ticket = new Ticket("SD-2026-000003", "Hardware", "Screen flicker", user, TicketCategory.HARDWARE, TicketPriority.P3);
+        ticket.setId(30L);
+        ticket.setCreatedAt(LocalDateTime.of(2026, 3, 1, 9, 0));
+
+        LocalDateTime originalDeadline = LocalDateTime.of(2026, 3, 1, 17, 0);
+        SlaPolicy policy = new SlaPolicy("P3", TicketPriority.P3, BigDecimal.valueOf(4.0), BigDecimal.valueOf(8.0), "8h");
+        SlaTracker tracker = new SlaTracker(ticket, policy, ticket.getCreatedAt().plusHours(4), originalDeadline);
+        tracker.setId(31L);
+
+        when(trackerRepository.findByTicketId(30L)).thenReturn(Optional.of(tracker));
+        when(trackerRepository.save(any(SlaTracker.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // 1. Pause SLA when awaiting requester response
+        LocalDateTime pauseTime = LocalDateTime.of(2026, 3, 1, 11, 0);
+        tracker.pause(pauseTime);
+        assertTrue(tracker.getIsPaused());
+        assertEquals(pauseTime, tracker.getPausedAt());
+
+        // 2. Escalation engine must SUPPRESS breach checks while paused
+        when(trackerRepository.findActiveTrackersWithTickets()).thenReturn(List.of(tracker));
+        int escalationsWhilePaused = escalationService.checkAndProcessEscalations();
+        assertEquals(0, escalationsWhilePaused, "Paused tickets must not trigger breaches or escalations");
+
+        // 3. Resume SLA 120 minutes later
+        tracker.resume(pauseTime.plusMinutes(120));
+        assertFalse(tracker.getIsPaused());
+        assertNull(tracker.getPausedAt());
+        assertEquals(120, tracker.getTotalPausedMinutes());
+
+        // 4. Verify resolution deadline was pushed forward by exactly 120 minutes
+        assertEquals(originalDeadline.plusMinutes(120), tracker.getResolutionDeadline());
+        assertEquals(LocalDateTime.of(2026, 3, 1, 19, 0), tracker.getResolutionDeadline());
+        assertEquals(LocalDateTime.of(2026, 3, 1, 19, 0), ticket.getSlaDeadline());
+    }
 }

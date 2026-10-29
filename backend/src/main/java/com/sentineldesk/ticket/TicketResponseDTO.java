@@ -28,6 +28,9 @@ public class TicketResponseDTO {
     private IncidentDTO relatedIncident;
     private SlaTrackerDTO slaTracker;
     private AiTriageResponseDTO aiSuggestion;
+    private Integer csatRating;
+    private String csatFeedback;
+    private Integer reopenedCount;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -51,6 +54,9 @@ public class TicketResponseDTO {
         this.slaDeadline = t.getSlaDeadline();
         this.resolutionSummary = t.getResolutionSummary();
         this.relatedIncident = t.getRelatedIncident() != null ? new IncidentDTO(t.getRelatedIncident()) : null;
+        this.csatRating = t.getCsatRating();
+        this.csatFeedback = t.getCsatFeedback();
+        this.reopenedCount = t.getReopenedCount();
         this.createdAt = t.getCreatedAt();
         this.updatedAt = t.getUpdatedAt();
     }
@@ -221,5 +227,29 @@ public class TicketResponseDTO {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public Integer getCsatRating() {
+        return csatRating;
+    }
+
+    public void setCsatRating(Integer csatRating) {
+        this.csatRating = csatRating;
+    }
+
+    public String getCsatFeedback() {
+        return csatFeedback;
+    }
+
+    public void setCsatFeedback(String csatFeedback) {
+        this.csatFeedback = csatFeedback;
+    }
+
+    public Integer getReopenedCount() {
+        return reopenedCount;
+    }
+
+    public void setReopenedCount(Integer reopenedCount) {
+        this.reopenedCount = reopenedCount;
     }
 }

@@ -72,6 +72,9 @@ export interface SlaTracker {
   warningIssued: boolean;
   remainingMinutes: number;
   isOverdue: boolean;
+  isPaused?: boolean;
+  pausedAt?: string;
+  totalPausedMinutes?: number;
 }
 
 export interface AiTriageSuggestion {
@@ -134,6 +137,9 @@ export interface Ticket {
   relatedIncident?: Incident;
   slaTracker?: SlaTracker;
   aiSuggestion?: AiTriageSuggestion;
+  csatRating?: number;
+  csatFeedback?: string;
+  reopenedCount?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -293,6 +299,8 @@ export interface SlaReportSummary {
   meanTimeToAcknowledgeMinutes: number;
   meanTimeToResolveMinutes: number;
   priorityBreakdown: Record<string, { total: number; breached: number; compliant: number }>;
+  averageCsatScore?: number;
+  totalCsatRatings?: number;
 }
 
 export interface AiStatusResponse {
@@ -300,5 +308,33 @@ export interface AiStatusResponse {
   model: string;
   configured: boolean;
   fallbackAvailable: boolean;
+}
+
+export interface CsatRequest {
+  rating: number;
+  feedback?: string;
+}
+
+export interface AiCopilotRequest {
+  action: 'DRAFT_RESOLUTION' | 'SUMMARIZE' | 'SUGGEST_STEPS';
+  additionalInstructions?: string;
+}
+
+export interface AiCopilotResponse {
+  action: string;
+  generatedText: string;
+  recommendedCategory?: string;
+  recommendedPriority?: string;
+  modelProvider?: string;
+  disclaimer?: string;
+}
+
+export interface CannedResponse {
+  id: number;
+  shortcut: string;
+  title: string;
+  category: string;
+  content: string;
+  isActive: boolean;
 }
 

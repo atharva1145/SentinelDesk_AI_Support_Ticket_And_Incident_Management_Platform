@@ -55,6 +55,11 @@ public class EscalationService {
         for (SlaTracker tracker : activeTrackers) {
             Ticket ticket = tracker.getTicket();
 
+            // ITIL SLA: If SLA clock is paused (e.g. waiting for customer), skip breach calculations
+            if (Boolean.TRUE.equals(tracker.getIsPaused())) {
+                continue;
+            }
+
             // 1. Check Resolution Breach
             if (now.isAfter(tracker.getResolutionDeadline()) && !Boolean.TRUE.equals(tracker.getResolutionMet())) {
                 tracker.setResolutionBreached(true);

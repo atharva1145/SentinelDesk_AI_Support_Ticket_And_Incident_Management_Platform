@@ -66,6 +66,15 @@ public class Ticket {
     @Column(name = "resolution_summary")
     private String resolutionSummary;
 
+    @Column(name = "csat_rating")
+    private Integer csatRating;
+
+    @Column(name = "csat_feedback", length = 500)
+    private String csatFeedback;
+
+    @Column(name = "reopened_count", nullable = false)
+    private Integer reopenedCount = 0;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "related_incident_id")
     private Incident relatedIncident;
@@ -247,5 +256,29 @@ public class Ticket {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public Integer getCsatRating() {
+        return csatRating;
+    }
+
+    public void setCsatRating(Integer csatRating) {
+        this.csatRating = csatRating;
+    }
+
+    public String getCsatFeedback() {
+        return csatFeedback;
+    }
+
+    public void setCsatFeedback(String csatFeedback) {
+        this.csatFeedback = csatFeedback;
+    }
+
+    public Integer getReopenedCount() {
+        return reopenedCount != null ? reopenedCount : 0;
+    }
+
+    public void setReopenedCount(Integer reopenedCount) {
+        this.reopenedCount = reopenedCount;
     }
 }

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ticketApi, commentApi, aiApi, teamApi, authApi, knowledgeBaseApi } from '../api/apiService';
+import { ticketApi, commentApi, aiApi, teamApi, authApi, knowledgeBaseApi, cannedResponseApi } from '../api/apiService';
 import {
   Ticket,
   TicketComment,
@@ -11,6 +11,7 @@ import {
   User,
   AiTriageSuggestion,
   KnowledgeArticle,
+  CannedResponse,
 } from '../api/types';
 import { PriorityBadge } from '../components/PriorityBadge';
 import { StatusBadge } from '../components/StatusBadge';
@@ -34,6 +35,11 @@ import {
   Check,
   BookOpen,
   ExternalLink,
+  PauseCircle,
+  Star,
+  Zap,
+  Bot,
+  Wand2,
 } from 'lucide-react';
 
 export const TicketDetails: React.FC = () => {
@@ -76,6 +82,17 @@ export const TicketDetails: React.FC = () => {
   const [suggestedRunbooks, setSuggestedRunbooks] = useState<KnowledgeArticle[]>([]);
   const [previewRunbook, setPreviewRunbook] = useState<KnowledgeArticle | null>(null);
 
+  // Canned Responses & Copilot
+  const [cannedResponses, setCannedResponses] = useState<CannedResponse[]>([]);
+  const [showCannedDropdown, setShowCannedDropdown] = useState(false);
+  const [copilotLoading, setCopilotLoading] = useState(false);
+  const [copilotNote, setCopilotNote] = useState<string | null>(null);
+
+  // CSAT Rating
+  const [csatRating, setCsatRating] = useState<number>(5);
+  const [csatFeedback, setCsatFeedback] = useState<string>('');
+  const [submittingCsat, setSubmittingCsat] = useState<boolean>(false);
+
   const loadTicketData = async () => {
     try {
       const [tRes, cRes, sHist, aHist] = await Promise.all([
@@ -102,8 +119,52 @@ export const TicketDetails: React.FC = () => {
     if (isStaff) {
       authApi.getStaffAndAgents().then(setAgents).catch(console.error);
       teamApi.getTeams().then(setTeams).catch(console.error);
+      cannedResponseApi.getAll().then(setCannedResponses).catch(console.error);
     }
   }, [ticketId]);
+
+  const handleRunCopilot = async (action: 'DRAFT_RESOLUTION' | 'SUMMARIZE' | 'SUGGEST_STEPS') => {
+    setCopilotLoading(true);
+    setCopilotNote(null);
+    try {
+      const res = await aiApi.runCopilot(ticketId, { action });
+      if (action === 'DRAFT_RESOLUTION') {
+        setCommentText((prev) => (prev ? `${prev}\n\n${res.generatedText}` : res.generatedText));
+        setIsInternalComment(false);
+      } else if (action === 'SUGGEST_STEPS') {
+        setCommentText((prev) => (prev ? `${prev}\n\n[Diagnostic Recommendations]:\n${res.generatedText}` : `[Diagnostic Recommendations]:\n${res.generatedText}`));
+        setIsInternalComment(true);
+      } else {
+        setCopilotNote(`Thread Summary (${res.modelProvider || 'SentinelDesk AI'}):\n${res.generatedText}`);
+      }
+    } catch (err: any) {
+      alert(err.message || 'AI Copilot request failed');
+    } finally {
+      setCopilotLoading(false);
+    }
+  };
+
+  const handleSelectCanned = (canned: CannedResponse) => {
+    setCommentText((prev) => (prev ? `${prev}\n\n${canned.content}` : canned.content));
+    setShowCannedDropdown(false);
+  };
+
+  const handleSubmitCsat = async () => {
+    if (!csatRating) return;
+    setSubmittingCsat(true);
+    try {
+      await ticketApi.submitCsat(ticketId, {
+        rating: csatRating,
+        feedback: csatFeedback.trim() || undefined,
+      });
+      alert('Thank you! Your feedback has been recorded and the ticket is now closed.');
+      loadTicketData();
+    } catch (err: any) {
+      alert(err.message || 'Failed to submit satisfaction rating');
+    } finally {
+      setSubmittingCsat(false);
+    }
+  };
 
   const handlePostComment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -312,13 +373,18 @@ export const TicketDetails: React.FC = () => {
       <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-xs space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="font-mono text-sm font-bold text-sky-600 bg-sky-50 px-2.5 py-0.5 rounded border border-sky-100">
                 {ticket.ticketNumber}
               </span>
               <PriorityBadge priority={ticket.priority} />
               <StatusBadge status={ticket.status} />
               <SlaBadge tracker={ticket.slaTracker} />
+              {Boolean(ticket.reopenedCount && ticket.reopenedCount > 0) && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                  <RotateCcw className="w-3 h-3 text-rose-600" /> Reopened ({ticket.reopenedCount}x)
+                </span>
+              )}
             </div>
             <h1 className="text-xl font-bold text-slate-900 tracking-tight">{ticket.title}</h1>
             <p className="text-xs text-slate-500">
@@ -392,6 +458,96 @@ export const TicketDetails: React.FC = () => {
             <p className="text-emerald-800">{ticket.resolutionSummary}</p>
           </div>
         )}
+
+        {/* SLA Paused Warning Banner */}
+        {ticket.slaTracker?.isPaused && (
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-xs space-y-1">
+            <div className="flex items-center gap-2 font-bold text-amber-900 uppercase tracking-wider">
+              <PauseCircle className="w-4 h-4 text-amber-600 animate-pulse shrink-0" />
+              <span>SLA Clock Paused (Awaiting Requester Feedback)</span>
+            </div>
+            <p className="text-amber-800">
+              The resolution SLA deadline is currently frozen while awaiting response from the requester.
+              {ticket.slaTracker.totalPausedMinutes ? ` Total accumulated paused duration: ${ticket.slaTracker.totalPausedMinutes}m.` : ''} The SLA clock resumes automatically once work continues.
+            </p>
+          </div>
+        )}
+
+        {/* CSAT Survey for Requester on Resolved Ticket */}
+        {ticket.status === 'RESOLVED' && !ticket.csatRating && isRequester && (
+          <div className="p-4 bg-gradient-to-r from-purple-50 via-indigo-50 to-purple-50 border border-purple-200 rounded-lg text-xs space-y-3">
+            <div>
+              <span className="font-bold text-purple-950 uppercase tracking-wider flex items-center gap-1.5">
+                <Star className="w-4 h-4 text-amber-500 fill-amber-500" /> Customer Satisfaction (CSAT) Survey
+              </span>
+              <p className="text-purple-800 mt-0.5">Please rate your support resolution experience to confirm resolution and close this ticket.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-slate-600 font-semibold">Satisfaction:</span>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  type="button"
+                  onClick={() => setCsatRating(star)}
+                  className="focus:outline-hidden transform hover:scale-110 transition-transform"
+                >
+                  <Star
+                    className={`w-5 h-5 ${
+                      star <= csatRating ? 'text-amber-400 fill-amber-400' : 'text-slate-300'
+                    }`}
+                  />
+                </button>
+              ))}
+              <span className="text-xs font-bold text-purple-900 ml-2">
+                {csatRating === 5 ? '5 - Excellent' : csatRating === 4 ? '4 - Good' : csatRating === 3 ? '3 - Average' : csatRating === 2 ? '2 - Poor' : '1 - Very Poor'}
+              </span>
+            </div>
+            <div className="space-y-2">
+              <input
+                type="text"
+                value={csatFeedback}
+                onChange={(e) => setCsatFeedback(e.target.value)}
+                placeholder="Optional feedback about the resolution or agent assistance..."
+                className="w-full p-2 bg-white border border-purple-200 rounded-md text-xs focus:ring-2 focus:ring-purple-400/30 focus:outline-hidden"
+              />
+              <button
+                type="button"
+                disabled={submittingCsat}
+                onClick={handleSubmitCsat}
+                className="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg text-xs shadow-xs transition-colors"
+              >
+                {submittingCsat ? 'Submitting...' : 'Submit Satisfaction Rating & Close Ticket'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Recorded CSAT Feedback Display */}
+        {ticket.csatRating && (
+          <div className="p-4 bg-purple-50/70 border border-purple-200 rounded-lg text-xs space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-purple-950 uppercase tracking-wider flex items-center gap-1.5">
+                <Star className="w-4 h-4 text-amber-500 fill-amber-500" /> Requester CSAT Score
+              </span>
+              <div className="flex items-center gap-1">
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <Star
+                    key={s}
+                    className={`w-3.5 h-3.5 ${
+                      s <= ticket.csatRating! ? 'text-amber-400 fill-amber-400' : 'text-slate-300'
+                    }`}
+                  />
+                ))}
+                <span className="ml-1 font-bold text-purple-900">{ticket.csatRating} / 5</span>
+              </div>
+            </div>
+            {ticket.csatFeedback && (
+              <p className="text-purple-800 italic bg-white/70 p-2 rounded border border-purple-100">
+                "{ticket.csatFeedback}"
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Main 2-Column Body */}
@@ -454,6 +610,99 @@ export const TicketDetails: React.FC = () => {
 
               {/* Add Comment Box */}
               <form onSubmit={handlePostComment} className="pt-4 border-t border-slate-100 space-y-3">
+                {/* Copilot Note Banner if available */}
+                {copilotNote && (
+                  <div className="p-3 bg-sky-50 border border-sky-200 rounded-lg text-xs space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-sky-900 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-sky-600" /> AI Discussion Summary
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setCopilotNote(null)}
+                        className="text-slate-400 hover:text-slate-600 text-[11px]"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                    <p className="text-slate-700 whitespace-pre-wrap">{copilotNote}</p>
+                  </div>
+                )}
+
+                {/* Agent Productivity Toolbar: AI Copilot & Canned Responses */}
+                {isStaff && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="font-semibold text-slate-700 flex items-center gap-1 text-[11px] mr-1">
+                        <Sparkles className="w-3.5 h-3.5 text-sky-600" /> AI Copilot:
+                      </span>
+                      <button
+                        type="button"
+                        disabled={copilotLoading}
+                        onClick={() => handleRunCopilot('DRAFT_RESOLUTION')}
+                        className="px-2.5 py-1 bg-white hover:bg-sky-50 text-sky-700 border border-slate-200 hover:border-sky-300 rounded font-medium text-[11px] transition-colors disabled:opacity-50"
+                      >
+                        Draft Resolution
+                      </button>
+                      <button
+                        type="button"
+                        disabled={copilotLoading}
+                        onClick={() => handleRunCopilot('SUGGEST_STEPS')}
+                        className="px-2.5 py-1 bg-white hover:bg-sky-50 text-sky-700 border border-slate-200 hover:border-sky-300 rounded font-medium text-[11px] transition-colors disabled:opacity-50"
+                      >
+                        Diagnostic Steps
+                      </button>
+                      <button
+                        type="button"
+                        disabled={copilotLoading}
+                        onClick={() => handleRunCopilot('SUMMARIZE')}
+                        className="px-2.5 py-1 bg-white hover:bg-sky-50 text-sky-700 border border-slate-200 hover:border-sky-300 rounded font-medium text-[11px] transition-colors disabled:opacity-50"
+                      >
+                        Summarize
+                      </button>
+                      {copilotLoading && (
+                        <span className="text-[11px] text-sky-600 animate-pulse font-medium ml-1">
+                          Synthesizing...
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Canned Responses Dropdown */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setShowCannedDropdown(!showCannedDropdown)}
+                        className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded font-medium text-[11px] flex items-center gap-1 transition-colors"
+                      >
+                        <Zap className="w-3 h-3 text-amber-600" />
+                        Quick Reply
+                      </button>
+
+                      {showCannedDropdown && (
+                        <div className="absolute right-0 bottom-full mb-2 w-72 bg-white rounded-lg shadow-lg border border-slate-200 p-2 z-50 space-y-1">
+                          <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider px-2 py-1">
+                            Pre-Approved Canned Templates
+                          </div>
+                          {cannedResponses.map((item) => (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => handleSelectCanned(item)}
+                              className="w-full text-left p-2 rounded hover:bg-slate-50 transition-colors text-xs border border-transparent hover:border-slate-100 block"
+                            >
+                              <div className="font-semibold text-slate-800 flex items-center justify-between">
+                                <span>{item.title}</span>
+                                <span className="font-mono text-[10px] text-slate-400">{item.shortcut}</span>
+                              </div>
+                              <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">{item.content}</p>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 <textarea
                   rows={3}
                   value={commentText}

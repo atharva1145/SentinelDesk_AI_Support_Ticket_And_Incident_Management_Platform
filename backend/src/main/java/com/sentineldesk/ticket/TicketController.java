@@ -114,4 +114,13 @@ public class TicketController {
                 .collect(Collectors.toList());
         return ResponseEntity.ok(ApiResponse.success(history));
     }
+
+    @PostMapping("/{id}/csat")
+    @Operation(summary = "Submit Customer Satisfaction (CSAT) rating and feedback for a resolved ticket")
+    public ResponseEntity<ApiResponse<TicketResponseDTO>> submitCsat(
+            @PathVariable Long id,
+            @Valid @RequestBody CsatRequest request) {
+        TicketResponseDTO response = ticketService.submitCsat(id, request);
+        return ResponseEntity.ok(ApiResponse.success("Thank you for your rating! Ticket has been closed.", response));
+    }
 }

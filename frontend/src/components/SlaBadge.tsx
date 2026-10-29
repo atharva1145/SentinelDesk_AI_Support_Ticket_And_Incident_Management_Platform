@@ -1,6 +1,6 @@
 import React from 'react';
 import { SlaTracker } from '../api/types';
-import { Clock, AlertOctagon, CheckCircle2 } from 'lucide-react';
+import { Clock, AlertOctagon, CheckCircle2, PauseCircle } from 'lucide-react';
 
 interface SlaBadgeProps {
   tracker?: SlaTracker;
@@ -19,6 +19,14 @@ export const SlaBadge: React.FC<SlaBadgeProps> = ({ tracker }) => {
     return (
       <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
         <CheckCircle2 className="w-3 h-3" /> Met SLA
+      </span>
+    );
+  }
+
+  if (tracker.isPaused) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-800 border border-amber-300">
+        <PauseCircle className="w-3 h-3 text-amber-600 animate-pulse" /> SLA Paused
       </span>
     );
   }

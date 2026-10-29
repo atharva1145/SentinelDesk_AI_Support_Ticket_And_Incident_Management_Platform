@@ -12,6 +12,8 @@ public class SlaReportSummaryDTO {
     private double resolutionComplianceRate;
     private long meanTimeToAcknowledgeMinutes;
     private long meanTimeToResolveMinutes;
+    private Double averageCsatRating;
+    private long totalRatings;
     private Map<String, Object> priorityBreakdown;
 
     public SlaReportSummaryDTO() {}
@@ -19,7 +21,8 @@ public class SlaReportSummaryDTO {
     public SlaReportSummaryDTO(long totalTickets, long compliantTickets, long breachedTickets,
                                double overallComplianceRate, double firstResponseComplianceRate,
                                double resolutionComplianceRate, long meanTimeToAcknowledgeMinutes,
-                               long meanTimeToResolveMinutes, Map<String, Object> priorityBreakdown) {
+                               long meanTimeToResolveMinutes, Double averageCsatRating, long totalRatings,
+                               Map<String, Object> priorityBreakdown) {
         this.totalTickets = totalTickets;
         this.compliantTickets = compliantTickets;
         this.breachedTickets = breachedTickets;
@@ -28,6 +31,8 @@ public class SlaReportSummaryDTO {
         this.resolutionComplianceRate = resolutionComplianceRate;
         this.meanTimeToAcknowledgeMinutes = meanTimeToAcknowledgeMinutes;
         this.meanTimeToResolveMinutes = meanTimeToResolveMinutes;
+        this.averageCsatRating = averageCsatRating;
+        this.totalRatings = totalRatings;
         this.priorityBreakdown = priorityBreakdown;
     }
 
@@ -39,5 +44,7 @@ public class SlaReportSummaryDTO {
     public double getResolutionComplianceRate() { return resolutionComplianceRate; }
     public long getMeanTimeToAcknowledgeMinutes() { return meanTimeToAcknowledgeMinutes; }
     public long getMeanTimeToResolveMinutes() { return meanTimeToResolveMinutes; }
+    public Double getAverageCsatRating() { return averageCsatRating; }
+    public long getTotalRatings() { return totalRatings; }
     public Map<String, Object> getPriorityBreakdown() { return priorityBreakdown; }
 }

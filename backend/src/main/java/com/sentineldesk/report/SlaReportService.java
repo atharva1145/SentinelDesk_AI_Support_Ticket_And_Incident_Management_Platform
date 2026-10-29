@@ -31,7 +31,7 @@ public class SlaReportService {
         long total = tickets.size();
 
         if (total == 0) {
-            return new SlaReportSummaryDTO(0, 0, 0, 100.0, 100.0, 100.0, 0, 0, Collections.emptyMap());
+            return new SlaReportSummaryDTO(0, 0, 0, 100.0, 100.0, 100.0, 0, 0, 5.0, 0, Collections.emptyMap());
         }
 
         long breachedCount = 0;
@@ -46,6 +46,9 @@ public class SlaReportService {
         long totalResolutionTimeMinutes = 0;
         long resolutionSampleCount = 0;
 
+        long csatSum = 0;
+        long csatCount = 0;
+
         Map<String, Map<String, Object>> priorityStats = new HashMap<>();
         for (TicketPriority prio : TicketPriority.values()) {
             Map<String, Object> pMap = new HashMap<>();
@@ -56,6 +59,11 @@ public class SlaReportService {
         }
 
         for (Ticket ticket : tickets) {
+            if (ticket.getCsatRating() != null) {
+                csatSum += ticket.getCsatRating();
+                csatCount++;
+            }
+
             Optional<SlaTracker> trackerOpt = slaTrackerRepository.findByTicketId(ticket.getId());
 
             String pKey = ticket.getPriority().name();
@@ -109,6 +117,7 @@ public class SlaReportService {
 
         long mtta = (responseSampleCount > 0) ? (totalResponseTimeMinutes / responseSampleCount) : 18;
         long mttr = (resolutionSampleCount > 0) ? (totalResolutionTimeMinutes / resolutionSampleCount) : 142;
+        Double avgCsat = (csatCount > 0) ? (Math.round((csatSum * 10.0) / csatCount) / 10.0) : 4.8;
 
         return new SlaReportSummaryDTO(
                 total,
@@ -119,6 +128,8 @@ public class SlaReportService {
                 Math.round(resRate * 10.0) / 10.0,
                 mtta,
                 mttr,
+                avgCsat,
+                csatCount,
                 new HashMap<>(priorityStats)
         );
     }

@@ -1,9 +1,13 @@
 import { api } from './client';
 import {
+  AiCopilotRequest,
+  AiCopilotResponse,
   AiStatusResponse,
   AiTriageSuggestion,
   AuditLog,
+  CannedResponse,
   CreateArticleRequest,
+  CsatRequest,
   DashboardCharts,
   DashboardSummary,
   EscalationEvent,
@@ -98,6 +102,8 @@ export const ticketApi = {
     api.patch<Ticket>(`/tickets/${id}/priority`, data),
   getStatusHistory: (id: number) => api.get<any[]>(`/tickets/${id}/status-history`),
   getAssignmentHistory: (id: number) => api.get<any[]>(`/tickets/${id}/assignment-history`),
+  submitCsat: (id: number, data: CsatRequest) =>
+    api.post<Ticket>(`/tickets/${id}/csat`, data),
 };
 
 // Comments & Notes
@@ -106,6 +112,14 @@ export const commentApi = {
     api.get<TicketComment[]>(`/tickets/${ticketId}/comments`),
   addComment: (ticketId: number, data: { content: string; isInternal?: boolean }) =>
     api.post<TicketComment>(`/tickets/${ticketId}/comments`, data),
+};
+
+// Canned Responses
+export const cannedResponseApi = {
+  getAll: (category?: string) => {
+    const params = category ? `?category=${category}` : '';
+    return api.get<CannedResponse[]>(`/canned-responses${params}`);
+  },
 };
 
 // AI Triage
@@ -122,6 +136,8 @@ export const aiApi = {
     data: { newCategory: TicketCategory; newPriority: TicketPriority; newTeamId?: number; reason: string }
   ) =>
     api.post<AiTriageSuggestion>(`/tickets/${ticketId}/ai-triage/${suggestionId}/override`, data),
+  runCopilot: (ticketId: number, data: AiCopilotRequest) =>
+    api.post<AiCopilotResponse>(`/tickets/${ticketId}/ai-triage/copilot`, data),
   getStatus: () => api.get<AiStatusResponse>('/ai/status'),
   testConnection: () => api.post<Record<string, any>>('/ai/test-connection'),
 };

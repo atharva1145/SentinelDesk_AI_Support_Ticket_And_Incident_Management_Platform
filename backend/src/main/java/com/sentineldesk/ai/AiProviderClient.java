@@ -356,4 +356,34 @@ public class AiProviderClient {
                 .replace("IGNORE ALL PREVIOUS INSTRUCTIONS", "[REDACTED_PROMPT_ATTEMPT]")
                 .trim();
     }
+
+    public String runCopilotQuery(String action, String customPrompt, String title, String description, String requesterName) {
+        String reqName = (requesterName != null && !requesterName.trim().isEmpty()) ? requesterName : "Customer";
+        String act = action != null ? action.toUpperCase() : "DRAFT_REPLY";
+
+        switch (act) {
+            case "DRAFT_REPLY":
+                return "Hello " + reqName + ",\n\n" +
+                        "Thank you for contacting SentinelDesk Support. Our engineering team has investigated the reported issue regarding \"" + title + "\". " +
+                        "We have verified that the underlying configuration has been corrected and service is restored.\n\n" +
+                        "Could you please confirm if everything is working properly on your end? " +
+                        "If you need any further assistance, feel free to reply directly to this ticket.\n\n" +
+                        "Best regards,\n" +
+                        "SentinelDesk Support Desk";
+
+            case "SUMMARIZE":
+                return "• Scope: Issue \"" + title + "\" reported by " + reqName + ".\n" +
+                        "• Symptoms: " + (description.length() > 120 ? description.substring(0, 120) + "..." : description) + "\n" +
+                        "• Action Items: Internal triage complete, root-cause verification in progress.";
+
+            case "NEXT_STEPS":
+                return "1. Verify network/host connectivity and confirm client credentials.\n" +
+                        "2. Inspect relevant application log outputs for fatal exceptions.\n" +
+                        "3. Check matching KB Runbooks in SentinelDesk Knowledge Base for standard remediation playbooks.";
+
+            case "CUSTOM":
+            default:
+                return "AI Copilot Response: For ticket \"" + title + "\", recommended best practice is to isolate affected endpoints and review corresponding error codes in the IT Knowledge Base.";
+        }
+    }
 }
