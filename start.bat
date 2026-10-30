@@ -21,7 +21,11 @@ for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8080 ^| findstr LISTENING') 
 
 echo.
 echo [1/3] Launching Backend (Spring Boot 3.3.4, Java 21)...
-start "SentinelDesk AI - Backend" /d "backend" cmd /k "mvnw.cmd spring-boot:run"
+if exist "backend\target\sentineldesk-backend-1.0.0.jar" (
+    start "SentinelDesk AI - Backend" /d "backend" cmd /k "java -jar target\sentineldesk-backend-1.0.0.jar"
+) else (
+    start "SentinelDesk AI - Backend" /d "backend" cmd /k "mvnw.cmd spring-boot:run"
+)
 
 echo [2/3] Launching Frontend (React, Vite, TypeScript)...
 start "SentinelDesk AI - Frontend" /d "frontend" cmd /k "npm run dev"
