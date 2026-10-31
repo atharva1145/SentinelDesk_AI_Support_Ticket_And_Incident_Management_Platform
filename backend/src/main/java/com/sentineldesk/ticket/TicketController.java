@@ -4,6 +4,9 @@ import com.sentineldesk.common.response.ApiResponse;
 import com.sentineldesk.common.response.PagedResponse;
 import com.sentineldesk.history.TicketAssignmentHistoryDTO;
 import com.sentineldesk.history.TicketStatusHistoryDTO;
+import com.sentineldesk.routing.AutoAssignBatchResultDTO;
+import com.sentineldesk.routing.AutoAssignResultDTO;
+import com.sentineldesk.routing.RoutingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -21,9 +24,11 @@ import java.util.stream.Collectors;
 public class TicketController {
 
     private final TicketService ticketService;
+    private final RoutingService routingService;
 
-    public TicketController(TicketService ticketService) {
+    public TicketController(TicketService ticketService, RoutingService routingService) {
         this.ticketService = ticketService;
+        this.routingService = routingService;
     }
 
     @PostMapping
@@ -122,5 +127,24 @@ public class TicketController {
             @Valid @RequestBody CsatRequest request) {
         TicketResponseDTO response = ticketService.submitCsat(id, request);
         return ResponseEntity.ok(ApiResponse.success("Thank you for your rating! Ticket has been closed.", response));
+    }
+
+    @PostMapping("/{id}/auto-assign")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPPORT_MANAGER', 'SUPPORT_AGENT')")
+    @Operation(summary = "Auto-assign ticket to best available agent using least-busy or round-robin routing")
+    public ResponseEntity<ApiResponse<AutoAssignResultDTO>> autoAssignTicket(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "LEAST_BUSY") String strategy) {
+        AutoAssignResultDTO result = routingService.autoAssignTicket(id, strategy);
+        return ResponseEntity.ok(ApiResponse.success("Ticket auto-assigned successfully", result));
+    }
+
+    @PostMapping("/auto-balance")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPPORT_MANAGER')")
+    @Operation(summary = "Batch auto-balance and dispatch unassigned tickets across support staff")
+    public ResponseEntity<ApiResponse<AutoAssignBatchResultDTO>> autoBalanceQueue(
+            @RequestParam(defaultValue = "LEAST_BUSY") String strategy) {
+        AutoAssignBatchResultDTO result = routingService.autoAssignAllUnassigned(strategy);
+        return ResponseEntity.ok(ApiResponse.success("Queue auto-balanced successfully", result));
     }
 }

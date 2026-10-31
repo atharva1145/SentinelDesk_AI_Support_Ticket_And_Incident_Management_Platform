@@ -35,6 +35,12 @@ public class IncidentController {
         return ResponseEntity.ok(ApiResponse.success(incidentService.getIncidentById(id)));
     }
 
+    @GetMapping("/{id}/post-mortem")
+    @Operation(summary = "Generate Executive Major Incident Post-Mortem (RCA Report)")
+    public ResponseEntity<ApiResponse<IncidentPostMortemDTO>> getPostMortem(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(incidentService.generatePostMortem(id)));
+    }
+
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPPORT_MANAGER', 'SUPPORT_AGENT')")
     @Operation(summary = "Declare and create new incident")

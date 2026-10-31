@@ -4,7 +4,10 @@ import {
   AiCopilotResponse,
   AiStatusResponse,
   AiTriageSuggestion,
+  AttachmentDTO,
   AuditLog,
+  AutoAssignBatchResult,
+  AutoAssignResult,
   CannedResponse,
   CreateArticleRequest,
   CsatRequest,
@@ -14,6 +17,7 @@ import {
   InboundEmailRequest,
   InboundEmailResponse,
   Incident,
+  IncidentPostMortem,
   KnowledgeArticle,
   Notification,
   PagedResponse,
@@ -104,6 +108,10 @@ export const ticketApi = {
   getAssignmentHistory: (id: number) => api.get<any[]>(`/tickets/${id}/assignment-history`),
   submitCsat: (id: number, data: CsatRequest) =>
     api.post<Ticket>(`/tickets/${id}/csat`, data),
+  autoAssignTicket: (id: number, strategy: string = 'LEAST_BUSY') =>
+    api.post<AutoAssignResult>(`/tickets/${id}/auto-assign?strategy=${strategy}`),
+  autoBalanceQueue: (strategy: string = 'LEAST_BUSY') =>
+    api.post<AutoAssignBatchResult>(`/tickets/auto-balance?strategy=${strategy}`),
 };
 
 // Comments & Notes
@@ -176,6 +184,27 @@ export const incidentApi = {
     api.delete<void>(`/incidents/${id}/link-tickets/${ticketId}`),
   updateStatus: (id: number, data: { status: string; rootCause?: string; resolutionSummary?: string }) =>
     api.patch<Incident>(`/incidents/${id}/status`, data),
+  getPostMortem: (id: number) =>
+    api.get<IncidentPostMortem>(`/incidents/${id}/post-mortem`),
+};
+
+// File Attachments
+export const attachmentApi = {
+  getTicketAttachments: (ticketId: number) =>
+    api.get<AttachmentDTO[]>(`/tickets/${ticketId}/attachments`),
+  uploadTicketAttachment: (ticketId: number, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post<AttachmentDTO>(`/tickets/${ticketId}/attachments`, formData);
+  },
+  getIncidentAttachments: (incidentId: number) =>
+    api.get<AttachmentDTO[]>(`/incidents/${incidentId}/attachments`),
+  uploadIncidentAttachment: (incidentId: number, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post<AttachmentDTO>(`/incidents/${incidentId}/attachments`, formData);
+  },
+  deleteAttachment: (id: number) => api.delete<void>(`/attachments/${id}`),
 };
 
 // Teams

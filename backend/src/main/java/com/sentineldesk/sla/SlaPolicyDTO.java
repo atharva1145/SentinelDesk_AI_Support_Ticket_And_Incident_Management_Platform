@@ -12,6 +12,7 @@ public class SlaPolicyDTO {
     private BigDecimal resolutionHours;
     private String description;
     private boolean isActive;
+    private boolean isBusinessHours;
     private LocalDateTime createdAt;
 
     public SlaPolicyDTO() {}
@@ -24,6 +25,7 @@ public class SlaPolicyDTO {
         this.resolutionHours = policy.getResolutionHours();
         this.description = policy.getDescription();
         this.isActive = policy.isActive();
+        this.isBusinessHours = policy.isBusinessHours();
         this.createdAt = policy.getCreatedAt();
     }
 
@@ -81,6 +83,14 @@ public class SlaPolicyDTO {
 
     public void setActive(boolean active) {
         isActive = active;
+    }
+
+    public boolean isBusinessHours() {
+        return isBusinessHours;
+    }
+
+    public void setBusinessHours(boolean businessHours) {
+        isBusinessHours = businessHours;
     }
 
     public LocalDateTime getCreatedAt() {

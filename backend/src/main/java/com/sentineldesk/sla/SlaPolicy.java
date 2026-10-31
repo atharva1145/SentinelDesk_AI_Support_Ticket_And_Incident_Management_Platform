@@ -31,6 +31,9 @@ public class SlaPolicy {
     @Column(name = "is_active", nullable = false)
     private boolean isActive = true;
 
+    @Column(name = "is_business_hours", nullable = false)
+    private boolean isBusinessHours = true;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
@@ -46,8 +49,14 @@ public class SlaPolicy {
         this.resolutionHours = resolutionHours;
         this.description = description;
         this.isActive = true;
+        this.isBusinessHours = priority != TicketPriority.P1;
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
+    }
+
+    public SlaPolicy(String name, TicketPriority priority, BigDecimal firstResponseHours, BigDecimal resolutionHours, String description, boolean isBusinessHours) {
+        this(name, priority, firstResponseHours, resolutionHours, description);
+        this.isBusinessHours = isBusinessHours;
     }
 
     @PreUpdate
@@ -109,6 +118,14 @@ public class SlaPolicy {
 
     public void setActive(boolean active) {
         isActive = active;
+    }
+
+    public boolean isBusinessHours() {
+        return isBusinessHours;
+    }
+
+    public void setBusinessHours(boolean businessHours) {
+        isBusinessHours = businessHours;
     }
 
     public LocalDateTime getCreatedAt() {

@@ -55,6 +55,7 @@ export interface SlaPolicy {
   resolutionHours: number;
   description?: string;
   isActive: boolean;
+  isBusinessHours?: boolean;
   createdAt: string;
 }
 
@@ -98,13 +99,16 @@ export interface AiTriageSuggestion {
   createdAt: string;
 }
 
+export type IncidentSeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+export type IncidentStatus = 'INVESTIGATING' | 'IDENTIFIED' | 'MONITORING' | 'RESOLVED';
+
 export interface Incident {
   id: number;
   incidentNumber: string;
   title: string;
   description?: string;
-  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
-  status: 'INVESTIGATING' | 'IDENTIFIED' | 'MONITORING' | 'RESOLVED';
+  severity: IncidentSeverity;
+  status: IncidentStatus;
   affectedService: string;
   owner?: User;
   rootCause?: string;
@@ -337,4 +341,77 @@ export interface CannedResponse {
   content: string;
   isActive: boolean;
 }
+
+export interface AttachmentDTO {
+  id: number;
+  ticketId?: number;
+  incidentId?: number;
+  filename: string;
+  fileSize: number;
+  contentType: string;
+  uploadedById?: number;
+  uploadedByName?: string;
+  createdAt: string;
+  downloadUrl: string;
+}
+
+export interface AutoAssignResult {
+  ticketId: number;
+  ticketNumber: string;
+  assignedAgentId: number;
+  assignedAgentName: string;
+  assignedAgentEmail: string;
+  assignedTeamId?: number;
+  assignedTeamName?: string;
+  strategy: string;
+  agentActiveTickets: number;
+  reason: string;
+}
+
+export interface AutoAssignBatchResult {
+  totalAssigned: number;
+  strategy: string;
+  assignments: AutoAssignResult[];
+}
+
+export interface PostMortemTicket {
+  id: number;
+  ticketNumber: string;
+  title: string;
+  priority: string;
+  status: string;
+  requesterName: string;
+}
+
+export interface PostMortemTimeline {
+  timestamp: string;
+  phase: string;
+  title: string;
+  description: string;
+}
+
+export interface IncidentPostMortem {
+  incidentId: number;
+  incidentNumber: string;
+  title: string;
+  description: string;
+  severity: IncidentSeverity;
+  status: IncidentStatus;
+  affectedService: string;
+  ownerName?: string;
+  ownerEmail?: string;
+  startedAt: string;
+  detectedAt: string;
+  resolvedAt?: string;
+  mttaMinutes: number;
+  mttrMinutes: number;
+  rootCause: string;
+  resolutionSummary: string;
+  postIncidentReview: string;
+  linkedTicketCount: number;
+  linkedTickets: PostMortemTicket[];
+  timeline: PostMortemTimeline[];
+  preventiveActionItems: string[];
+}
+
 

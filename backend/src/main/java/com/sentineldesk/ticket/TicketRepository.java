@@ -25,6 +25,9 @@ public interface TicketRepository extends JpaRepository<Ticket, Long>, JpaSpecif
     @Query("SELECT t FROM Ticket t WHERE t.assignedAgent IS NULL AND t.status NOT IN ('RESOLVED', 'CLOSED', 'CANCELLED')")
     Page<Ticket> findUnassignedActiveTickets(Pageable pageable);
 
+    @Query("SELECT COUNT(t) FROM Ticket t WHERE t.assignedAgent.id = :agentId AND t.status NOT IN ('RESOLVED', 'CLOSED', 'CANCELLED')")
+    long countActiveTicketsByAgentId(@org.springframework.data.repository.query.Param("agentId") Long agentId);
+
     // Dashboard count queries
     @Query("SELECT COUNT(t) FROM Ticket t WHERE t.status NOT IN ('RESOLVED', 'CLOSED', 'CANCELLED')")
     long countOpenTickets();

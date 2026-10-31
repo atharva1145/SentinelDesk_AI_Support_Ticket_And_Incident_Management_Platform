@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { incidentApi, authApi, ticketApi } from '../api/apiService';
-import { Incident, User, Ticket } from '../api/types';
+import { Incident, User, Ticket, IncidentPostMortem } from '../api/types';
 import { Modal } from '../components/Modal';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -14,6 +14,9 @@ import {
   ShieldAlert,
   Server,
   FileText,
+  Printer,
+  Clock,
+  CheckSquare,
 } from 'lucide-react';
 
 export const Incidents: React.FC = () => {
@@ -41,6 +44,25 @@ export const Incidents: React.FC = () => {
   // Link Ticket Modal
   const [linkingIncident, setLinkingIncident] = useState<Incident | null>(null);
   const [selectedTicketId, setSelectedTicketId] = useState('');
+
+  // Post-Mortem RCA Modal
+  const [postMortem, setPostMortem] = useState<IncidentPostMortem | null>(null);
+  const [loadingPostMortem, setLoadingPostMortem] = useState(false);
+  const [showPostMortemModal, setShowPostMortemModal] = useState(false);
+
+  const handleOpenPostMortem = async (incidentId: number) => {
+    setLoadingPostMortem(true);
+    setShowPostMortemModal(true);
+    try {
+      const pm = await incidentApi.getPostMortem(incidentId);
+      setPostMortem(pm);
+    } catch (err: any) {
+      alert(err.message || 'Failed to generate post-mortem report');
+      setShowPostMortemModal(false);
+    } finally {
+      setLoadingPostMortem(false);
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -197,6 +219,12 @@ export const Incidents: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleOpenPostMortem(inc.id)}
+                    className="px-2.5 py-1 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-md border border-purple-200 transition-colors flex items-center gap-1 shadow-2xs"
+                  >
+                    <FileText className="w-3.5 h-3.5" /> Post-Mortem (RCA)
+                  </button>
                   {isStaff && (
                     <>
                       <button
@@ -374,7 +402,7 @@ export const Incidents: React.FC = () => {
               <option value="">Choose ticket to correlate...</option>
               {openTickets.map((t) => (
                 <option key={t.id} value={t.id}>
-                  {t.ticketNumber} · {t.title} ({t.priority})
+                  {t.ticketNumber} Â· {t.title} ({t.priority})
                 </option>
               ))}
             </select>
@@ -455,6 +483,151 @@ export const Incidents: React.FC = () => {
             </button>
           </div>
         </div>
+      </Modal>
+
+      {/* Executive Major Incident Post-Mortem Modal */}
+      <Modal
+        isOpen={showPostMortemModal}
+        onClose={() => setShowPostMortemModal(false)}
+        title="Executive Incident Post-Mortem & RCA Report"
+        maxWidth="max-w-4xl"
+      >
+        {loadingPostMortem || !postMortem ? (
+          <div className="p-12 text-center">
+            <div className="w-8 h-8 border-3 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+            <p className="text-xs text-slate-500">Compiling executive post-mortem milestones & telemetry...</p>
+          </div>
+        ) : (
+          <div className="space-y-6 text-xs text-slate-700">
+            {/* Action Bar */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <span className="font-mono text-xs font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-100">
+                {postMortem.incidentNumber}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg shadow-xs transition-colors flex items-center gap-1.5"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Print / Export PDF</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Title & Service Header */}
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">{postMortem.title}</h2>
+              <p className="text-xs text-slate-500 mt-1">{postMortem.description}</p>
+            </div>
+
+            {/* KPI Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">Affected Service</span>
+                <span className="text-sm font-bold text-slate-800">{postMortem.affectedService}</span>
+              </div>
+              <div className="p-3 bg-blue-50/50 rounded-lg border border-blue-200">
+                <span className="text-[10px] uppercase font-bold text-blue-600 block">MTTA (Acknowledge)</span>
+                <span className="text-sm font-bold text-blue-900">{postMortem.mttaMinutes} minutes</span>
+              </div>
+              <div className="p-3 bg-purple-50/50 rounded-lg border border-purple-200">
+                <span className="text-[10px] uppercase font-bold text-purple-600 block">MTTR (Resolution)</span>
+                <span className="text-sm font-bold text-purple-900">{postMortem.mttrMinutes} minutes</span>
+              </div>
+              <div className="p-3 bg-amber-50/50 rounded-lg border border-amber-200">
+                <span className="text-[10px] uppercase font-bold text-amber-600 block">Correlated Tickets</span>
+                <span className="text-sm font-bold text-amber-900">{postMortem.linkedTicketCount} tickets</span>
+              </div>
+            </div>
+
+            {/* Root Cause & Resolution */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-1">
+                <h4 className="font-bold text-slate-900 uppercase tracking-wider text-[11px] flex items-center gap-1">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-500" /> Root Cause Analysis (RCA)
+                </h4>
+                <p className="text-slate-700 leading-relaxed">{postMortem.rootCause}</p>
+              </div>
+              <div className="p-4 bg-emerald-50/50 rounded-lg border border-emerald-200 space-y-1">
+                <h4 className="font-bold text-emerald-900 uppercase tracking-wider text-[11px] flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Corrective Resolution
+                </h4>
+                <p className="text-emerald-800 leading-relaxed">{postMortem.resolutionSummary}</p>
+              </div>
+            </div>
+
+            {/* Chronological Incident Timeline */}
+            <div className="space-y-3">
+              <h4 className="font-bold text-slate-900 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-purple-600" /> Incident Response Timeline
+              </h4>
+              <div className="border border-slate-200 rounded-lg divide-y divide-slate-100 bg-white overflow-hidden">
+                {postMortem.timeline.map((evt, idx) => (
+                  <div key={idx} className="p-3 flex items-start gap-3 hover:bg-slate-50/60 transition-colors">
+                    <span className="font-mono text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-100 shrink-0 mt-0.5">
+                      {evt.phase}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-semibold text-slate-800 text-xs">{evt.title}</span>
+                        <span className="text-[10px] text-slate-400">
+                          {new Date(evt.timestamp).toLocaleString()}
+                        </span>
+                      </div>
+                      <p className="text-slate-500 text-[11px] mt-0.5">{evt.description}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Preventive Action Items */}
+            <div className="space-y-3">
+              <h4 className="font-bold text-slate-900 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                <CheckSquare className="w-3.5 h-3.5 text-sky-600" /> Preventive Action Items & Engineering Next Steps
+              </h4>
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
+                {postMortem.preventiveActionItems.map((item, idx) => (
+                  <div key={idx} className="flex items-center gap-2 text-slate-700 text-xs">
+                    <span className="w-4 h-4 rounded-full bg-sky-100 text-sky-700 font-bold flex items-center justify-center text-[10px] shrink-0">
+                      {idx + 1}
+                    </span>
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Linked Support Tickets */}
+            {postMortem.linkedTickets.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="font-bold text-slate-900 uppercase tracking-wider text-[11px]">
+                  Impacted Customer Support Tickets ({postMortem.linkedTickets.length})
+                </h4>
+                <div className="border border-slate-200 rounded-lg overflow-hidden divide-y divide-slate-100">
+                  {postMortem.linkedTickets.map((t) => (
+                    <div key={t.id} className="p-2.5 flex items-center justify-between text-xs hover:bg-slate-50/60">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-[10px] font-bold text-sky-600 bg-sky-50 px-1.5 py-0.2 rounded">
+                          {t.ticketNumber}
+                        </span>
+                        <span className="font-medium text-slate-800">{t.title}</span>
+                      </div>
+                      <span className="text-[10px] text-slate-400">Requester: {t.requesterName}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-400">
+              <span>Incident Commander: {postMortem.ownerName || 'Engineering Incident Command'} ({postMortem.ownerEmail || 'ops@sentineldesk.com'})</span>
+              <span>Report Generated: {new Date().toLocaleString()}</span>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

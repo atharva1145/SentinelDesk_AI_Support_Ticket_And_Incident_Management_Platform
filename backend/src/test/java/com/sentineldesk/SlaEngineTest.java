@@ -47,7 +47,8 @@ public class SlaEngineTest {
         sseNotificationService = mock(SseNotificationService.class);
         userRepository = mock(UserRepository.class);
 
-        slaService = new SlaService(policyRepository, trackerRepository);
+        BusinessHoursService businessHoursService = new BusinessHoursService();
+        slaService = new SlaService(policyRepository, trackerRepository, businessHoursService);
         escalationService = new EscalationService(escalationRepository, trackerRepository, notificationService, sseNotificationService, userRepository);
     }
 
@@ -70,6 +71,27 @@ public class SlaEngineTest {
         // Resolution 4h after creation
         assertEquals(LocalDateTime.of(2026, 1, 1, 14, 0), tracker.getResolutionDeadline());
         assertEquals(tracker.getResolutionDeadline(), ticket.getSlaDeadline());
+    }
+
+    @Test
+    @DisplayName("Business Hours SLA engine pauses over weekend and correctly projects deadline into next business day")
+    void testBusinessHoursSlaCalculation() {
+        SlaPolicy p3Policy = new SlaPolicy("P3 Normal", TicketPriority.P3, BigDecimal.valueOf(2.0), BigDecimal.valueOf(8.0), "8h Business SLA", true);
+        when(policyRepository.findByPriority(TicketPriority.P3)).thenReturn(Optional.of(p3Policy));
+        when(trackerRepository.save(any(SlaTracker.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        User user = new User("test@corp.com", "hash", "Tester", Role.REQUESTER, "IT");
+        Ticket ticket = new Ticket("SD-2026-000004", "Normal Request", "App support", user, TicketCategory.SOFTWARE, TicketPriority.P3);
+        // Friday May 1, 2026 at 16:00 (4:00 PM)
+        ticket.setCreatedAt(LocalDateTime.of(2026, 5, 1, 16, 0));
+
+        SlaTracker tracker = slaService.initTrackerForTicket(ticket);
+
+        assertNotNull(tracker);
+        // Friday 16:00 + 2h = Friday 18:00 (end of workday)
+        assertEquals(LocalDateTime.of(2026, 5, 1, 18, 0), tracker.getFirstResponseDeadline());
+        // Friday 16:00 + 8h = 2h Friday + 6h Monday = Monday May 4 at 15:00
+        assertEquals(LocalDateTime.of(2026, 5, 4, 15, 0), tracker.getResolutionDeadline());
     }
 
     @Test

@@ -6,7 +6,7 @@ import { PriorityBadge } from '../components/PriorityBadge';
 import { StatusBadge } from '../components/StatusBadge';
 import { SlaBadge } from '../components/SlaBadge';
 import { Modal } from '../components/Modal';
-import { Inbox, UserPlus, ArrowRight, Clock, AlertTriangle } from 'lucide-react';
+import { Inbox, UserPlus, ArrowRight, Clock, AlertTriangle, Zap, CheckCircle2 } from 'lucide-react';
 
 export const AssignmentQueue: React.FC = () => {
   const navigate = useNavigate();
@@ -19,6 +19,9 @@ export const AssignmentQueue: React.FC = () => {
   const [agentId, setAgentId] = useState('');
   const [teamId, setTeamId] = useState('');
   const [reason, setReason] = useState('');
+
+  const [autoBalancing, setAutoBalancing] = useState(false);
+  const [balanceMessage, setBalanceMessage] = useState<string | null>(null);
 
   const loadQueue = async () => {
     setLoading(true);
@@ -60,20 +63,69 @@ export const AssignmentQueue: React.FC = () => {
     }
   };
 
+  const handleAutoBalanceQueue = async () => {
+    setAutoBalancing(true);
+    setBalanceMessage(null);
+    try {
+      const res = await ticketApi.autoBalanceQueue('LEAST_BUSY');
+      setBalanceMessage(`Successfully load-balanced ${res.totalAssigned} unassigned ticket(s) across available support staff!`);
+      loadQueue();
+    } catch (err: any) {
+      alert(err.message || 'Auto-balance failed');
+    } finally {
+      setAutoBalancing(false);
+    }
+  };
+
+  const handleQuickAutoAssign = async (tId: number) => {
+    try {
+      const res = await ticketApi.autoAssignTicket(tId, 'LEAST_BUSY');
+      setBalanceMessage(`Ticket #${res.ticketNumber} auto-assigned to ${res.assignedAgentName}!`);
+      loadQueue();
+    } catch (err: any) {
+      alert(err.message || 'Quick assign failed');
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-slate-900 tracking-tight">Unassigned Ticket Queue</h1>
           <p className="text-xs text-slate-500">
             Open tickets awaiting support agent pickup or team assignment
           </p>
         </div>
-        <span className="px-3 py-1 bg-amber-50 text-amber-700 text-xs font-semibold rounded-full border border-amber-200 flex items-center gap-1.5">
-          <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-          {tickets.length} tickets requiring triage
-        </span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={autoBalancing || tickets.length === 0}
+            onClick={handleAutoBalanceQueue}
+            className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors flex items-center gap-1.5"
+          >
+            <Zap className="w-3.5 h-3.5" />
+            <span>{autoBalancing ? 'Balancing Queue...' : 'Auto-Balance All (Least-Busy)'}</span>
+          </button>
+          <span className="px-3 py-1 bg-amber-50 text-amber-700 text-xs font-semibold rounded-full border border-amber-200 flex items-center gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+            {tickets.length} unassigned
+          </span>
+        </div>
       </div>
+
+      {balanceMessage && (
+        <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-lg text-xs text-indigo-900 flex items-center justify-between">
+          <span className="flex items-center gap-2 font-medium">
+            <CheckCircle2 className="w-4 h-4 text-indigo-600 shrink-0" /> {balanceMessage}
+          </span>
+          <button
+            onClick={() => setBalanceMessage(null)}
+            className="text-indigo-400 hover:text-indigo-600 font-bold text-xs ml-2"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
         {loading ? (
@@ -126,16 +178,27 @@ export const AssignmentQueue: React.FC = () => {
                       <SlaBadge tracker={t.slaTracker} />
                     </td>
                     <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                      <button
-                        onClick={() => {
-                          setSelectedTicket(t);
-                          setTeamId(t.assignedTeam ? String(t.assignedTeam.id) : '');
-                        }}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-700 text-xs font-semibold rounded-lg border border-sky-200 transition-colors"
-                      >
-                        <UserPlus className="w-3.5 h-3.5" />
-                        <span>Assign</span>
-                      </button>
+                      <div className="inline-flex items-center gap-1.5 justify-end">
+                        <button
+                          type="button"
+                          onClick={() => handleQuickAutoAssign(t.id)}
+                          title="Auto-assign to least-busy agent"
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold rounded-lg border border-indigo-200 transition-colors shadow-2xs"
+                        >
+                          <Zap className="w-3 h-3 text-indigo-600" />
+                          <span>Auto-Assign</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedTicket(t);
+                            setTeamId(t.assignedTeam ? String(t.assignedTeam.id) : '');
+                          }}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-700 text-xs font-semibold rounded-lg border border-sky-200 transition-colors"
+                        >
+                          <UserPlus className="w-3.5 h-3.5" />
+                          <span>Manual</span>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

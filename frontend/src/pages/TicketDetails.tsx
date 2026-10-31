@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ticketApi, commentApi, aiApi, teamApi, authApi, knowledgeBaseApi, cannedResponseApi } from '../api/apiService';
+import { ticketApi, commentApi, aiApi, teamApi, authApi, knowledgeBaseApi, cannedResponseApi, attachmentApi } from '../api/apiService';
 import {
   Ticket,
   TicketComment,
@@ -12,6 +12,7 @@ import {
   AiTriageSuggestion,
   KnowledgeArticle,
   CannedResponse,
+  AttachmentDTO,
 } from '../api/types';
 import { PriorityBadge } from '../components/PriorityBadge';
 import { StatusBadge } from '../components/StatusBadge';
@@ -40,6 +41,12 @@ import {
   Zap,
   Bot,
   Wand2,
+  Paperclip,
+  Download,
+  Trash2,
+  File,
+  FileText,
+  UploadCloud,
 } from 'lucide-react';
 
 export const TicketDetails: React.FC = () => {
@@ -93,18 +100,29 @@ export const TicketDetails: React.FC = () => {
   const [csatFeedback, setCsatFeedback] = useState<string>('');
   const [submittingCsat, setSubmittingCsat] = useState<boolean>(false);
 
+  // Attachments
+  const [attachments, setAttachments] = useState<AttachmentDTO[]>([]);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  // Auto-Assign
+  const [autoAssigning, setAutoAssigning] = useState(false);
+  const [autoAssignMessage, setAutoAssignMessage] = useState<string | null>(null);
+
   const loadTicketData = async () => {
     try {
-      const [tRes, cRes, sHist, aHist] = await Promise.all([
+      const [tRes, cRes, sHist, aHist, attRes] = await Promise.all([
         ticketApi.getTicket(ticketId),
         commentApi.getComments(ticketId),
         ticketApi.getStatusHistory(ticketId),
         ticketApi.getAssignmentHistory(ticketId),
+        attachmentApi.getTicketAttachments(ticketId).catch(() => []),
       ]);
       setTicket(tRes);
       setComments(cRes);
       setStatusHistory(sHist);
       setAssignmentHistory(aHist);
+      setAttachments(attRes || []);
 
       knowledgeBaseApi.suggestArticles(tRes.title, tRes.category).then(setSuggestedRunbooks).catch(() => {});
     } catch (err) {
@@ -112,6 +130,74 @@ export const TicketDetails: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleUploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingFile(true);
+    setUploadError(null);
+    try {
+      const uploaded = await attachmentApi.uploadTicketAttachment(ticketId, file);
+      setAttachments((prev) => [uploaded, ...prev]);
+    } catch (err: any) {
+      setUploadError(err.message || 'File upload failed');
+    } finally {
+      setUploadingFile(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleDeleteAttachment = async (attachmentId: number) => {
+    if (!window.confirm('Are you sure you want to delete this attachment?')) return;
+    try {
+      await attachmentApi.deleteAttachment(attachmentId);
+      setAttachments((prev) => prev.filter((a) => a.id !== attachmentId));
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete attachment');
+    }
+  };
+
+  const handleDownloadAttachment = (attachment: AttachmentDTO) => {
+    const token = localStorage.getItem('token');
+    fetch(attachment.downloadUrl, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('Download failed');
+        return res.blob();
+      })
+      .then((blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = attachment.filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      })
+      .catch((err) => alert(err.message || 'Failed to download file'));
+  };
+
+  const handleAutoAssign = async (strategy: 'LEAST_BUSY' | 'ROUND_ROBIN' = 'LEAST_BUSY') => {
+    setAutoAssigning(true);
+    setAutoAssignMessage(null);
+    try {
+      const result = await ticketApi.autoAssignTicket(ticketId, strategy);
+      setAutoAssignMessage(`Assigned to ${result.assignedAgentName} via ${result.strategy} algorithm (${result.agentActiveTickets} active tickets).`);
+      loadTicketData();
+    } catch (err: any) {
+      alert(err.message || 'Auto-assignment failed');
+    } finally {
+      setAutoAssigning(false);
+    }
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
 
   useEffect(() => {
@@ -389,7 +475,7 @@ export const TicketDetails: React.FC = () => {
             <h1 className="text-xl font-bold text-slate-900 tracking-tight">{ticket.title}</h1>
             <p className="text-xs text-slate-500">
               Submitted by <span className="font-semibold text-slate-700">{ticket.requester.fullName}</span> ({ticket.requester.department || 'General'}) on{' '}
-              {new Date(ticket.createdAt).toLocaleString()} · Category:{' '}
+              {new Date(ticket.createdAt).toLocaleString()} Â· Category:{' '}
               <span className="font-medium text-slate-800 capitalize">{ticket.category.toLowerCase()}</span>
             </p>
           </div>
@@ -397,16 +483,35 @@ export const TicketDetails: React.FC = () => {
           {/* Quick Actions Bar */}
           <div className="flex flex-wrap items-center gap-2">
             {isStaff && (
-              <button
-                onClick={() => {
-                  setSelectedAgentId(ticket.assignedAgent ? String(ticket.assignedAgent.id) : '');
-                  setSelectedTeamId(ticket.assignedTeam ? String(ticket.assignedTeam.id) : '');
-                  setShowAssignModal(true);
-                }}
-                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors"
-              >
-                Assign / Reroute
-              </button>
+              <>
+                <button
+                  disabled={autoAssigning}
+                  onClick={() => handleAutoAssign('LEAST_BUSY')}
+                  title="Auto-assign to agent with lowest active ticket workload"
+                  className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-2xs"
+                >
+                  <Zap className="w-3.5 h-3.5 text-indigo-600" />
+                  {autoAssigning ? 'Routing...' : 'Auto-Assign (Least-Busy)'}
+                </button>
+                <button
+                  disabled={autoAssigning}
+                  onClick={() => handleAutoAssign('ROUND_ROBIN')}
+                  title="Auto-assign via round-robin queue rotation"
+                  className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-medium rounded-lg transition-colors"
+                >
+                  Round-Robin
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedAgentId(ticket.assignedAgent ? String(ticket.assignedAgent.id) : '');
+                    setSelectedTeamId(ticket.assignedTeam ? String(ticket.assignedTeam.id) : '');
+                    setShowAssignModal(true);
+                  }}
+                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors"
+                >
+                  Manual Assign
+                </button>
+              </>
             )}
 
             {isManager && (
@@ -433,12 +538,26 @@ export const TicketDetails: React.FC = () => {
           </div>
         </div>
 
+        {autoAssignMessage && (
+          <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-lg text-xs text-indigo-900 flex items-center justify-between">
+            <span className="flex items-center gap-2 font-medium">
+              <CheckCircle2 className="w-4 h-4 text-indigo-600 shrink-0" /> {autoAssignMessage}
+            </span>
+            <button
+              onClick={() => setAutoAssignMessage(null)}
+              className="text-indigo-400 hover:text-indigo-600 text-xs font-bold ml-2"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {ticket.relatedIncident && (
           <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg flex items-center justify-between text-xs text-rose-800">
             <div className="flex items-center gap-2">
               <Flame className="w-4 h-4 text-rose-600 shrink-0" />
               <span>
-                Linked to Major Incident: <span className="font-bold">{ticket.relatedIncident.incidentNumber}</span> — {ticket.relatedIncident.title}
+                Linked to Major Incident: <span className="font-bold">{ticket.relatedIncident.incidentNumber}</span> â€” {ticket.relatedIncident.title}
               </span>
             </div>
             <button
@@ -562,6 +681,92 @@ export const TicketDetails: React.FC = () => {
             </div>
           </div>
 
+          {/* File Attachments Card */}
+          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <Paperclip className="w-4 h-4 text-sky-600" />
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                  Attachments & Logs ({attachments.length})
+                </h3>
+              </div>
+              <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1 bg-sky-50 hover:bg-sky-100 text-sky-700 text-xs font-semibold rounded-lg border border-sky-200 transition-colors">
+                <UploadCloud className="w-3.5 h-3.5" />
+                <span>{uploadingFile ? 'Uploading...' : 'Attach File'}</span>
+                <input
+                  type="file"
+                  onChange={handleUploadFile}
+                  disabled={uploadingFile}
+                  className="hidden"
+                />
+              </label>
+            </div>
+
+            {uploadError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-700 flex items-center justify-between">
+                <span>{uploadError}</span>
+                <button onClick={() => setUploadError(null)} className="text-rose-400 hover:text-rose-600 font-bold">✕</button>
+              </div>
+            )}
+
+            {attachments.length === 0 ? (
+              <div className="text-center py-6 border-2 border-dashed border-slate-200 rounded-lg bg-slate-50/50">
+                <File className="w-8 h-8 text-slate-300 mx-auto mb-1.5" />
+                <p className="text-xs text-slate-500 font-medium">No attachments uploaded yet</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Screenshots (.png, .jpg), error logs (.log, .txt, .json), crash dumps, or configs up to 15MB
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {attachments.map((att) => (
+                  <div
+                    key={att.id}
+                    className="p-3 rounded-lg border border-slate-200 hover:border-slate-300 bg-slate-50/50 flex items-center justify-between gap-3 group transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0 text-slate-500">
+                        {att.filename.match(/\.(png|jpg|jpeg|gif|svg)$/i) ? (
+                          <FileText className="w-4 h-4 text-emerald-600" />
+                        ) : att.filename.match(/\.(log|txt|json|xml|csv)$/i) ? (
+                          <FileText className="w-4 h-4 text-sky-600" />
+                        ) : (
+                          <File className="w-4 h-4 text-slate-600" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-slate-800 truncate" title={att.filename}>
+                          {att.filename}
+                        </p>
+                        <p className="text-[10px] text-slate-400">
+                          {formatFileSize(att.fileSize)} · {att.uploadedByName || 'User'} · {new Date(att.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => handleDownloadAttachment(att)}
+                        title="Download Attachment"
+                        className="p-1.5 text-slate-500 hover:text-sky-600 hover:bg-sky-50 rounded-md transition-colors"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                      </button>
+                      {(isStaff || att.uploadedById === user?.id) && (
+                        <button
+                          onClick={() => handleDeleteAttachment(att.id)}
+                          title="Delete Attachment"
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Conversation and Notes Feed */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
@@ -599,7 +804,7 @@ export const TicketDetails: React.FC = () => {
                         )}
                       </div>
                       <span className="text-[11px] text-slate-400">
-                        {new Date(c.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ·{' '}
+                        {new Date(c.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} Â·{' '}
                         {new Date(c.createdAt).toLocaleDateString()}
                       </span>
                     </div>
@@ -762,7 +967,7 @@ export const TicketDetails: React.FC = () => {
                   </div>
                   <div>
                     <h3 className="text-xs font-bold text-sky-950 uppercase tracking-wider">AI Triage Recommendation</h3>
-                    <span className="text-[10px] text-sky-600 font-medium">{ticket.aiSuggestion.modelProvider} · {ticket.aiSuggestion.confidenceEstimate}% confidence</span>
+                    <span className="text-[10px] text-sky-600 font-medium">{ticket.aiSuggestion.modelProvider} Â· {ticket.aiSuggestion.confidenceEstimate}% confidence</span>
                   </div>
                 </div>
 
@@ -915,7 +1120,7 @@ export const TicketDetails: React.FC = () => {
               <div className="flex justify-between items-center">
                 <span className="text-slate-400 font-medium">Assigned Team:</span>
                 <span className="font-semibold text-slate-800">
-                  {ticket.assignedTeam ? ticket.assignedTeam.name : '—'}
+                  {ticket.assignedTeam ? ticket.assignedTeam.name : 'â€”'}
                 </span>
               </div>
               <div className="flex justify-between items-center">
@@ -927,7 +1132,7 @@ export const TicketDetails: React.FC = () => {
               <div className="flex justify-between items-center">
                 <span className="text-slate-400 font-medium">SLA Deadline:</span>
                 <span className="font-semibold text-slate-800">
-                  {ticket.slaDeadline ? new Date(ticket.slaDeadline).toLocaleString() : '—'}
+                  {ticket.slaDeadline ? new Date(ticket.slaDeadline).toLocaleString() : 'â€”'}
                 </span>
               </div>
             </div>
@@ -944,11 +1149,11 @@ export const TicketDetails: React.FC = () => {
                   <div className="w-1.5 h-1.5 rounded-full bg-sky-500 mt-1.5 shrink-0" />
                   <div>
                     <span className="font-semibold text-slate-800">
-                      {sh.oldStatus ? `${sh.oldStatus} → ` : ''}{sh.newStatus}
+                      {sh.oldStatus ? `${sh.oldStatus} â†’ ` : ''}{sh.newStatus}
                     </span>
                     <p className="text-slate-500">{sh.reason}</p>
                     <span className="text-[10px] text-slate-400">
-                      {new Date(sh.createdAt).toLocaleString()} · {sh.changedBy?.fullName || 'System'}
+                      {new Date(sh.createdAt).toLocaleString()} Â· {sh.changedBy?.fullName || 'System'}
                     </span>
                   </div>
                 </div>
@@ -1085,10 +1290,10 @@ export const TicketDetails: React.FC = () => {
                 onChange={(e) => setOverridePriority(e.target.value as TicketPriority)}
                 className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg"
               >
-                <option value="P1">P1 · Critical</option>
-                <option value="P2">P2 · High</option>
-                <option value="P3">P3 · Medium</option>
-                <option value="P4">P4 · Low</option>
+                <option value="P1">P1 Â· Critical</option>
+                <option value="P2">P2 Â· High</option>
+                <option value="P3">P3 Â· Medium</option>
+                <option value="P4">P4 Â· Low</option>
               </select>
             </div>
           </div>
@@ -1132,10 +1337,10 @@ export const TicketDetails: React.FC = () => {
               onChange={(e) => setNewPriority(e.target.value as TicketPriority)}
               className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg"
             >
-              <option value="P1">P1 · Critical (15 min response, 4h resolution)</option>
-              <option value="P2">P2 · High (1h response, 8h resolution)</option>
-              <option value="P3">P3 · Medium (4h response, 48h resolution)</option>
-              <option value="P4">P4 · Low (24h response, 120h resolution)</option>
+              <option value="P1">P1 Â· Critical (15 min response, 4h resolution)</option>
+              <option value="P2">P2 Â· High (1h response, 8h resolution)</option>
+              <option value="P3">P3 Â· Medium (4h response, 48h resolution)</option>
+              <option value="P4">P4 Â· Low (24h response, 120h resolution)</option>
             </select>
           </div>
           <div>
@@ -1171,7 +1376,7 @@ export const TicketDetails: React.FC = () => {
         <Modal
           isOpen={!!previewRunbook}
           onClose={() => setPreviewRunbook(null)}
-          title={`${previewRunbook.articleCode} — ${previewRunbook.title}`}
+          title={`${previewRunbook.articleCode} â€” ${previewRunbook.title}`}
           maxWidth="max-w-3xl"
         >
           <div className="space-y-4">

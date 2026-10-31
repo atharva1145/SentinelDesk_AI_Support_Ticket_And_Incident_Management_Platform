@@ -9,7 +9,9 @@ export async function request<T>(
   const token = localStorage.getItem('sentineldesk_token');
 
   const headers = new Headers(options.headers || {});
-  headers.set('Content-Type', 'application/json');
+  if (!(options.body instanceof FormData)) {
+    headers.set('Content-Type', 'application/json');
+  }
   headers.set('Accept', 'application/json');
 
   if (token) {
@@ -40,10 +42,11 @@ export async function request<T>(
 
 export const api = {
   get: <T>(url: string) => request<T>(url, { method: 'GET' }),
-  post: <T>(url: string, body?: any) =>
+  post: <T>(url: string, body?: any, options?: RequestInit) =>
     request<T>(url, {
       method: 'POST',
-      body: body ? JSON.stringify(body) : undefined,
+      body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined,
+      ...options,
     }),
   put: <T>(url: string, body?: any) =>
     request<T>(url, {

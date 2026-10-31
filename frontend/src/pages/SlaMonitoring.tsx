@@ -19,6 +19,7 @@ export const SlaMonitoring: React.FC = () => {
   const [firstResponseHours, setFirstResponseHours] = useState<number>(0);
   const [resolutionHours, setResolutionHours] = useState<number>(0);
   const [policyDesc, setPolicyDesc] = useState('');
+  const [isBusinessHours, setIsBusinessHours] = useState(true);
 
   const loadSlaData = async () => {
     setLoading(true);
@@ -50,6 +51,7 @@ export const SlaMonitoring: React.FC = () => {
         firstResponseHours,
         resolutionHours,
         description: policyDesc,
+        isBusinessHours,
       });
       setEditingPolicy(null);
       loadSlaData();
@@ -101,6 +103,7 @@ export const SlaMonitoring: React.FC = () => {
             <thead className="bg-slate-50 text-slate-500 text-xs font-semibold uppercase tracking-wider border-b border-slate-100">
               <tr>
                 <th className="py-3 px-4">Priority Policy</th>
+                <th className="py-3 px-4">Schedule Engine</th>
                 <th className="py-3 px-4">First Response Target</th>
                 <th className="py-3 px-4">Resolution Target</th>
                 <th className="py-3 px-4">Policy Description</th>
@@ -112,6 +115,17 @@ export const SlaMonitoring: React.FC = () => {
                 <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
                   <td className="py-3.5 px-4 whitespace-nowrap">
                     <PriorityBadge priority={p.priority} />
+                  </td>
+                  <td className="py-3.5 px-4 whitespace-nowrap">
+                    {p.isBusinessHours ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                        🕒 Business Hours (9–6 M–F)
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+                        ⚡ 24x7 Continuous
+                      </span>
+                    )}
                   </td>
                   <td className="py-3.5 px-4 whitespace-nowrap font-semibold text-slate-800 text-xs">
                     {p.firstResponseHours < 1
@@ -132,6 +146,7 @@ export const SlaMonitoring: React.FC = () => {
                           setFirstResponseHours(p.firstResponseHours);
                           setResolutionHours(p.resolutionHours);
                           setPolicyDesc(p.description || '');
+                          setIsBusinessHours(p.isBusinessHours ?? true);
                         }}
                         className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-sky-600 hover:text-sky-700 bg-sky-50 hover:bg-sky-100 rounded-md transition-colors"
                       >
@@ -273,6 +288,19 @@ export const SlaMonitoring: React.FC = () => {
               onChange={(e) => setPolicyDesc(e.target.value)}
               className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs"
             />
+          </div>
+
+          <div className="flex items-center gap-2 pt-1">
+            <input
+              type="checkbox"
+              id="isBusinessHours"
+              checked={isBusinessHours}
+              onChange={(e) => setIsBusinessHours(e.target.checked)}
+              className="rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+            />
+            <label htmlFor="isBusinessHours" className="text-xs text-slate-700 font-semibold cursor-pointer">
+              Enforce Business Hours (Mon–Fri 09:00–18:00, exclude weekends & public holidays)
+            </label>
           </div>
 
           <div className="flex justify-end gap-2 pt-2">

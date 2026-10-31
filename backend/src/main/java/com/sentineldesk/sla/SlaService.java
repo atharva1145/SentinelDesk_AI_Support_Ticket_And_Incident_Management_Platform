@@ -19,10 +19,12 @@ public class SlaService {
 
     private final SlaPolicyRepository policyRepository;
     private final SlaTrackerRepository trackerRepository;
+    private final BusinessHoursService businessHoursService;
 
-    public SlaService(SlaPolicyRepository policyRepository, SlaTrackerRepository trackerRepository) {
+    public SlaService(SlaPolicyRepository policyRepository, SlaTrackerRepository trackerRepository, BusinessHoursService businessHoursService) {
         this.policyRepository = policyRepository;
         this.trackerRepository = trackerRepository;
+        this.businessHoursService = businessHoursService;
     }
 
     @Transactional
@@ -31,12 +33,11 @@ public class SlaService {
                 .orElseGet(() -> policyRepository.findAll().stream().findFirst()
                         .orElseThrow(() -> new ResourceNotFoundException("No SLA Policy configured")));
 
-        long firstResponseMinutes = (long) (policy.getFirstResponseHours().doubleValue() * 60);
-        long resolutionMinutes = (long) (policy.getResolutionHours().doubleValue() * 60);
-
         LocalDateTime baseTime = ticket.getCreatedAt() != null ? ticket.getCreatedAt() : LocalDateTime.now();
-        LocalDateTime firstResponseDeadline = baseTime.plusMinutes(firstResponseMinutes);
-        LocalDateTime resolutionDeadline = baseTime.plusMinutes(resolutionMinutes);
+        LocalDateTime firstResponseDeadline = businessHoursService.calculateDeadline(
+                baseTime, policy.getFirstResponseHours(), policy.isBusinessHours());
+        LocalDateTime resolutionDeadline = businessHoursService.calculateDeadline(
+                baseTime, policy.getResolutionHours(), policy.isBusinessHours());
 
         ticket.setSlaDeadline(resolutionDeadline);
 
@@ -100,8 +101,8 @@ public class SlaService {
             tracker.setPolicy(newPolicy);
 
             LocalDateTime baseTime = ticket.getCreatedAt() != null ? ticket.getCreatedAt() : LocalDateTime.now();
-            long resolutionMinutes = (long) (newPolicy.getResolutionHours().doubleValue() * 60);
-            LocalDateTime newResDeadline = baseTime.plusMinutes(resolutionMinutes);
+            LocalDateTime newResDeadline = businessHoursService.calculateDeadline(
+                    baseTime, newPolicy.getResolutionHours(), newPolicy.isBusinessHours());
 
             tracker.setResolutionDeadline(newResDeadline);
             ticket.setSlaDeadline(newResDeadline);
@@ -133,6 +134,7 @@ public class SlaService {
         if (dto.getResolutionHours() != null) policy.setResolutionHours(dto.getResolutionHours());
         if (dto.getDescription() != null) policy.setDescription(dto.getDescription());
         policy.setActive(dto.isActive());
+        policy.setBusinessHours(dto.isBusinessHours());
 
         policy = policyRepository.save(policy);
         return new SlaPolicyDTO(policy);
